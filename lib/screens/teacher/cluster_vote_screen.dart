@@ -138,7 +138,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
       ),
       actions: [
         if (session != null) ...[
-          // 그룹 승인 버튼 — 아직 승인 전이고 그룹이 있을 때만
+          // 그룹 승인 버튼 — 아직 승인하지 않았을 때만 표시
           if (!hasApprovedGroups && !_approved && widget.groups.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -184,7 +184,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 4),
               ),
             ),
-          // 투표 시작/닫기
+          // 투표 시작/닫기 버튼
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(

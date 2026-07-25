@@ -508,7 +508,7 @@ class _VoteList extends StatelessWidget {
     if (groups.isEmpty) {
       return const Center(
         child: Text(
-          '교사가 그룹을 승인하면\n여기에 표시됩니다.',
+          '교사가 투표 그룹을 승인하면\n여기에 표시됩니다.',
           style: TextStyle(color: Colors.black38),
           textAlign: TextAlign.center,
         ),

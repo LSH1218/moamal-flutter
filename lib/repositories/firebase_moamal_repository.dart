@@ -20,7 +20,6 @@ class FirebaseMoamalRepository implements MoamalRepository {
   QuerySnapshot? _latestVotes;
   QuerySnapshot? _latestApprovedGroups;
   QuerySnapshot? _latestParticipants;
-  // votes/participants는 학생에게 permission-denied가 날 수 있음 — 에러도 "준비됨"으로 처리
   bool _votesReady = false;
   bool _participantsReady = false;
   StreamController<SessionState>? _controller;
@@ -156,7 +155,6 @@ class FirebaseMoamalRepository implements MoamalRepository {
       _participantsReady = true;
       _maybeEmit();
     }, onError: (_) {
-      // 학생은 participants 컬렉션 전체 구독 권한이 없음 — 빈 상태로 처리
       _participantsReady = true;
       _maybeEmit();
     });

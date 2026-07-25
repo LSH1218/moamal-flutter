@@ -43,6 +43,7 @@ void main() {
       expect(restored.ideaIds, sample.ideaIds);
       expect(restored.approvedBy, sample.approvedBy);
       expect(restored.revision, sample.revision);
+      // approvedAt은 Timestamp 왕복 후 초 단위 정밀도
       expect(restored.approvedAt.millisecondsSinceEpoch,
           closeTo(approvedAt.millisecondsSinceEpoch, 1000));
     });
@@ -56,11 +57,12 @@ void main() {
       expect(empty.revision, 1);
     });
 
-    test('idea_ids의 모든 ID가 원문 ideas에 있어야 한다', () {
+    test('idea_ids의 모든 ID가 원문 ideas 컬렉션을 참조할 수 있다', () {
       const originalIds = {'idea-a', 'idea-b', 'idea-c', 'idea-d'};
       final missing =
           sample.ideaIds.where((id) => !originalIds.contains(id)).toList();
-      expect(missing, isEmpty);
+      expect(missing, isEmpty,
+          reason: 'idea_ids에 원문 ideas에 없는 ID가 있으면 안 된다');
     });
   });
 }

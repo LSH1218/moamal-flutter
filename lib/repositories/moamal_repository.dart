@@ -10,8 +10,6 @@ abstract class MoamalRepository {
   Future<void> castVote(String sessionCode, String participantId, String groupId);
   Future<void> clearVotes(String sessionCode);
   Future<void> approveGroups(String sessionCode, List<ApprovedGroup> groups);
-
-  /// 학생 입장: 번호·이름을 participants 컬렉션에 저장
   Future<void> joinSession(String sessionCode, Participant participant);
 
   Stream<SessionState> listenToSession(String sessionCode);

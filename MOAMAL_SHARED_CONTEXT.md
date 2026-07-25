@@ -1,79 +1,127 @@
 # MOAMAL_SHARED_CONTEXT
 
+> Moamal 실행 대화방이 공유하는 단일 현황판이다. 계획과 실제 구현을 구분하며, 날짜와 코드 근거를 남긴다.
+
 ## 문서 정보
 
-- 마지막 갱신일: 2026-07-22
-- 갱신한 역할: UI/UX Design (반응형 리팩토링)
+- 마지막 갱신일: 2026-07-25
+- 갱신한 역할: AI/백엔드 (Cloud Functions 배포 완료)
+- 기준 Flutter 커밋: `95460d7` (feat: Firebase Cloud Functions 백엔드 추가 및 보안 강화)
 
-## Flutter UI 반응형 리팩토링 (2026-07-22)
+## 1. 경영 요약
 
-### 완료 (코드 반영, 빌드·실기기 검증 전)
+- 현재 단계: 문제 제안 교사를 디자인 파트너로 전환하기 직전의 파일럿 준비 단계. 코드 연결과 실제 교실 가치 검증은 구분한다.
+- 이번 달 최우선 목표: 최초 문제를 다시 확인하고, 한 교실 시나리오의 모의 테스트와 2~4주 파일럿을 완료한다.
+- 가장 큰 병목: 실제 교실 종단 간 사용·반복 사용·지불 의향이 확인되지 않았고, 학생 웹 참여도 미완성이다.
+- 대표가 결정해야 할 사항: 첫 디자인 파트너 합의, 파일럿 날짜, Blaze 결제 상한 및 계속/피벗/폐기 판정일
+- 다음 외부 검증 일정: 아이디어 제공 교사 재인터뷰와 모의 수업 일정을 2026-07-24까지 확정
 
-- **`lib/utils/responsive.dart` 신규**: `AppBreakpoints.compact(600)` / `medium(900)` 상수, `BuildContext` 확장(`isCompact`, `isTablet`, `sw`, `sh`, `viewPad`), `sheetConstraints()` 헬퍼. 앱 전체 브레이크포인트 단일 진입점.
-- **`join_screen.dart`**: body → `SafeArea + SingleChildScrollView + ConstrainedBox(maxWidth:480)`. 가로 모드·태블릿 overflow 해소. QR 스캔 프레임 `220×220` → `width×0.6`, clamp(180,280).
-- **`teacher_home_screen.dart`**: `_SttBox` 고정 `height` 파라미터 제거 → `expand` 플래그 분기(Compact: `ConstrainedBox(min:100, max:화면높이×0.22)`, Medium: 부모 `Expanded`). FAB 하단 여백 `90` 고정 → `viewPadding.bottom+76`. `_QrSheet` QR `160` → LayoutBuilder `width×0.45` clamp(120,200). `_QrFullScreen` QR `260` → LayoutBuilder `width×0.55` clamp(200,380). `showModalBottomSheet`에 `constraints: sheetConstraints()` 추가(maxWidth 520).
-- **`landing_screen.dart`**: PIN 다이얼로그 `insetPadding` — 태블릿 화면너비×0.3 마진. 수업 제목 다이얼로그 `insetPadding` — 태블릿 화면너비×0.25 마진. Compact/Medium Body 하단 패딩에 `MediaQuery.paddingOf().bottom` 반영.
-- **`display_tab.dart`**: QR `size:180` → `Builder`로 `width×0.38` clamp(140,220).
-- **`cluster_vote_screen.dart` / `report_screen.dart` / `student_session_screen.dart`**: `< 600` 리터럴 → `context.isCompact`.
+## 2. 제품 전략
 
-### 미검증 (다음 Flutter UI/UX 방 작업)
+- 핵심 고객: 초등 교사를 중심으로 한 교사
+- 핵심 문제: 자유 의견을 실시간으로 모으고 유사 의견을 교사가 검토한 뒤 토론·투표·기록으로 연결하기 어려움
+- 핵심 가치 제안: 의견 수집 → AI 유사 그룹화 → 교사 검토·승인 → 그룹 투표 → 기록
+- 현재 차별점: 일반 투표보다 교사 승인 가능한 의견 구조화와 수업 기록에 초점
+- 하지 않기로 한 것: 퀴즈를 핵심 흐름으로 두기, 학생 계정 강제, 웹 참여가 완성됐다고 표현하기, 클라이언트 비밀키 구조를 운영 배포로 간주하기
 
-- iPad Pro 12.9", 갤럭시탭 S 가로 모드, iPhone SE(375px) 가로 모드 실기기 빌드
-- 900px 이상 expanded 레이아웃 도입 여부 (현재 medium과 동일하게 처리됨)
-- 공유 화면(DisplayTab) 전용 전체화면 레이아웃 설계
+### 가치 가설 우선순위
 
-### 변경하지 않은 것 (의도적)
+1. 교사가 타이핑·수기 정리하지 않아도 학생 발언과 입력이 즉시 수집된다.
+2. 유사 의견을 AI가 묶고 교사가 승인해 전원의 의견을 빠르게 투표 대상으로 만든다.
+3. 수업 종료 후 결과가 기록으로 남아 교사의 사후 정리 시간을 줄인다.
 
-- 브랜드 컬러·버튼 스타일·비즈니스 로직
-- `main.dart` `maxScaleFactor: 1.3` (기존 텍스트 스케일 보호 유지)
-- `_SpeakCard` 세로 패딩 28 (Expanded 안에서 정상 동작)
+- STT는 제거하지 않는다. 단독 상품 가치가 아니라 1번 가설을 가능하게 하는 핵심 입력 수단으로 파일럿에서 사용률과 실패율을 측정한다.
+- 최초 범위는 학급회의 한 종류로 고정한다. 토론 평가, 심포지엄, 입장 전환 토론, 퀴즈는 후속 검증 전 개발 동결한다.
 
----
+## 2-1. 고객·BM 검증
 
-## 현재 상태 (STT/백엔드)
+- 최초 문제 근거: 2026년 6월 말 현직 교사 1명이 빠른 음성 기록, 유사 발언 묶기, 발표자/안건 표시, 클릭 투표를 직접 제안함. 이는 문제 존재의 정성 증거 1건이다.
+- 미확인: 실제 사용, 반복 사용, 타 교사 확장성, 지불 의향, 학교 구매 절차
+- 디자인 파트너: 아이디어 제공 교사 1명을 첫 디자인 파트너로 제안하되, 공동창업자나 대표 고객으로 일반화하지 않는다.
+- 초기 BM 원칙: 파일럿 무료. 파일럿 종료 인터뷰에서 개인 교사 월/연 결제와 학교 연간 결제를 각각 질문하되 가격을 먼저 제시하지 않는다.
 
-- Flutter Android Firebase 설정: `google-services.json` 로컬 배치 확인, 프로젝트 `moamal-1e601`, 패키지 `com.moamal.prototype` 일치
-- Firebase STT 프록시: 코드 구현 및 npm 의존성 설치 완료; Node 문법 검사 통과. 공개 URL 상태 확인은 HTTP 404로 아직 미배포임을 확인
-- OpenAI Secret Manager: 등록 전. 2026-07-18 `functions:secrets:set` 실행 결과 현재 Spark 요금제에서는 `secretmanager.googleapis.com` 활성화가 차단됨; Blaze 업그레이드 필요
-- Flutter STT: OpenAI 직접 호출 제거, Firebase ID 토큰 기반 프록시 호출로 변경. 2026-07-18 디버그 APK 빌드 성공
-- Android 기준 구현 STT: `BuildConfig.OPENAI_API_KEY`와 OpenAI 직접 호출 제거, 동일 Firebase ID 토큰 프록시로 변경. `assembleDebug` 성공
-- Gemini: 여전히 클라이언트 키/직접 호출 구조이며 별도 서버 이전 필요
+## 3. 핵심 교실 시나리오
 
-## STT 데이터 계약
+1. 교사가 세션을 만든다. — Flutter 구현 완료
+2. 학생이 QR/코드로 참여한다. — Flutter 코드 참여 구현, QR 생성 UI 확인
+3. 학생이 의견을 제출한다. — Flutter STT 제출 구현 (Cloud Functions 프록시)
+4. AI가 유사 의견을 그룹화한다. — Flutter 클라이언트 로컬 상태로 부분 구현
+5. 교사가 결과를 수정·승인한다. — **구현 완료**: ClusterVoteScreen에 "그룹 승인" 버튼, `approveGroups()` → Firestore 배치 저장
+6. 참여자가 그룹 단위로 투표한다. — **구현 완료**: 학생 화면이 `approvedGroups`를 구독해 `groupId`로 투표
+7. 교사가 결과와 기록을 저장한다. — 리포트 생성/표시 부분 구현, 영속 저장은 확인되지 않음
 
-```text
-POST /transcribeAudio
-Authorization: Bearer <Firebase ID token>
-Content-Type: audio/mp4
-Body: raw M4A bytes, max 10 MiB
+## 4. 구현 현황
 
-200: { "text": String }
-401: { "error": "unauthenticated" }
-413: { "error": "invalid_audio_size" }
-415: { "error": "unsupported_audio_type" }
-429: { "error": "rate_limited" }
-502: { "error": "transcription_failed" | "empty_transcription" }
+| 영역 | 구현 완료 | 부분 구현 | 계획/미구현 |
+|---|---|---|---|
+| Flutter 앱 | Firestore 세션/의견/투표/승인그룹/참가자 repository, 코드·QR 참여, 교사 승인 UI, 학생 그룹 투표, 반응형 레이아웃(compact/medium) | 교사/학생 화면, 수동 텍스트 입력 | 세션 참여 이후 종단 간 실기기 검증 |
+| AI/백엔드 | **Cloud Functions 배포 완료**: transcribeAudio, geminiProxy, kakaoVerify, naverVerify. Secret Manager: OPENAI_API_KEY, GEMINI_API_KEY. Firestore 보안 규칙 배포 완료 | — | App Check, 예산 알림, 환경 분리 |
+| 로그인 | Google Sign-In (교사), 익명 (학생), 슈퍼바이저 모드 | 카카오/네이버 Flutter SDK 연동 (Functions는 준비됨) | — |
+
+## 5. 배포·운영 현황 (2026-07-25 기준)
+
+- **Cloud Functions**: 4개 함수 배포 완료 (asia-northeast3)
+  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit
+  - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit
+  - `kakaoVerify`: 카카오 Custom Token 발급
+  - `naverVerify`: 네이버 Custom Token 발급
+- **Secret Manager**: OPENAI_API_KEY, GEMINI_API_KEY 등록 완료
+- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, rate limit 컬렉션)
+- **Firebase 요금제**: Blaze (종량제)
+- **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
+- **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, Node.js 20→22 업그레이드(2026-10-30 이전 필수), 개발/운영 환경 분리
+
+## 6. 주요 위험
+
+| 위험 | 영향 | 상태 | 대응 |
+|---|---|---|---|
+| ~~Gemini/OpenAI 키가 클라이언트에 노출~~ | ~~높음~~ | **해결됨 2026-07-25** — Cloud Functions Secret Manager 프록시 배포 | 완료 |
+| ~~Flutter 학생 투표가 `idea.id`에 저장됨~~ | ~~높음~~ | **해결됨 2026-07-17** | 완료 |
+| ~~교사 승인 단계 없음~~ | ~~높음~~ | **해결됨 2026-07-17** | 완료 |
+| 카카오/네이버 Flutter SDK 미연동 | 중간 | Functions 준비 완료, Flutter 앱 대화방 작업 필요 | Flutter 앱 대화방에서 SDK 연동 |
+| Node.js 20 지원 종료 | 중간 | 2026-10-30 이후 배포 불가 | `functions/package.json` engines.node → 22 |
+| 슈퍼바이저 모드 노출 | 중간 | 랜딩 로고 3탭 → PIN 1218 | 출시 전 제거 또는 숨김 처리 |
+| 학생이 다른 의견을 수정 가능 | 높음 | `ideas`의 `create, update`가 모든 인증 사용자에게 허용 | 작성자 UID 검증 추가 필요 |
+
+## 7. 현재 우선순위
+
+1. 아이디어 제공 교사 재인터뷰
+2. 성인 6~10명 최소 모의 수업: STT → 그룹 승인 → 투표 → 기록까지 테스트
+3. 카카오/네이버 Flutter SDK 연동 (Flutter 앱 대화방)
+4. 파일럿 필수 차단 요소만 수정
+5. 2026-08-21 계속/피벗/폐기 판정
+
+## 8. 대화방별 다음 행동
+
+- **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
+- **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
+- **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
+- **전략기획**: 파일럿 교사 섭외 및 일정 확정
+
+## 9. 최근 변경 기록
+
+| 날짜 | 역할 | 변경 내용 |
+|---|---|---|
+| 2026-07-25 | AI/백엔드 | Cloud Functions 4개 배포(transcribeAudio, geminiProxy, kakaoVerify, naverVerify), Firestore 보안 규칙 배포, Secret Manager 설정 완료 |
+| 2026-07-22 | Flutter UI/UX | 전체 UI 반응형 리팩토링 (compact/medium 2단계, responsive.dart 신규) |
+| 2026-07-20 | Flutter UI/UX | Flutter Android 실기기 1차 실행 성공: 랜딩 화면 정상 렌더링, 학생 참여 화면 전환 확인 |
+| 2026-07-18 | AI/백엔드 | STT 서버 프록시 코드 구현, Blaze 업그레이드 결정 |
+| 2026-07-17 | App 개발 | ApprovedGroup 모델, approveGroups(), ClusterVoteScreen 승인 버튼, 학생 그룹 투표 연결 |
+
+## 10. Firestore approvedGroups 스키마 계약
+
+```
+sessions/{sessionCode}/approvedGroups/{groupId}
+  groupId: String          — 문서 ID와 동일
+  title: String            — AI 생성 또는 폴백 제목
+  idea_ids: String[]       — 원문 ideas 하위 컬렉션 문서 ID 배열
+  approvedAt: Timestamp
+  approvedBy: String       — 교사 ownerUid
+  revision: Number         — 현재 항상 1; 재승인 시 증가 예정
 ```
 
-## 배포·보안 상태
-
-- Function 리전: `asia-northeast3`
-- Secret 이름: `OPENAI_API_KEY`; 코드/저장소/클라이언트에 값 저장 금지
-- 인증: Firebase ID token 서버 검증
-- 비용 제어: UID당 분당 10회, 최대 인스턴스 10, 음성 10 MiB 제한
-- 원음/전사문: 프록시에서 Firestore/Storage/로그에 저장하지 않음
-- 검증: `npm run check`, `flutter analyze`, `flutter test`, Flutter `flutter build apk --debug`, Android `assembleDebug` 통과(2026-07-18). 양쪽 클라이언트 코드에서 OpenAI 직접 호출/키 참조 0건. 테스트는 placeholder 1건이므로 STT 계약 자동화 테스트는 없음
-- 의존성 위험: 호환되는 `firebase-admin@13.10.0`, `firebase-functions@6.6.0`으로 잠금. `npm audit --omit=dev`의 Firebase Admin 하위 `uuid` 계열 중간 등급 취약점은 upstream peer 호환 수정 대기; `--force` 미적용
-- 미완료: Blaze 요금제 업그레이드 및 결제 계정 연결, Secret 등록, Functions 배포, 실 호출, App Check, 예산 알림, 환경 분리. Firebase CLI 로그인과 프로젝트 접근은 완료
-- 마이그레이션: 새 Flutter 앱은 배포된 프록시 URL이 필요하다. Function 배포 전에 새 클라이언트를 배포하면 STT가 실패한다. 구버전 앱의 클라이언트 OpenAI 키는 회수·폐기해야 한다.
-
-## 위험·다음 행동
-
-1. **전략적 보류(2026-07-18):** 학교 배포 단위 비용 모델과 서버 강제 한도를 정하기 전 Blaze 업그레이드·Function 배포를 진행하지 않음
-2. 학생 수·세션 수·평균 STT 분량을 기준으로 수업/학교/월 원가 모델 작성
-3. 요청당 녹음 길이, 세션당 STT 총량, 학교당 일/월 한도 및 전역 kill switch를 서버에서 강제
-4. 예산 알림과 OpenAI 프로젝트 지출 한도를 설정한 뒤 제한된 교사 파일럿 실시
-5. `firebase functions:secrets:set OPENAI_API_KEY`로 키 등록 후 인증된 짧은 한국어 M4A 통합 테스트
-6. Firestore `sttRateLimits.expiresAt` TTL 및 App Check 적용
-7. dev/staging/prod 프로젝트와 OpenAI 키 분리
-8. Gemini 직접 호출도 비용 모델에 포함해 별도 서버 프록시로 이전
+보존 조건:
+- `idea_ids`의 모든 ID는 `ideas` 하위 컬렉션 원문을 참조한다.
+- 승인 후 투표 중인 revision의 `groupId`는 바꾸지 않는다.
+- AI 재그룹화 초안과 승인본을 분리한다 (초안은 로컬 메모리, 승인본은 Firestore).
+- 학생 투표 문서(`votes/{participantId}.groupId`)는 승인본의 `groupId`만 참조한다.

@@ -11,7 +11,7 @@ class SessionState {
   final List<Idea> ideas;
   final Map<String, String> votes; // participantId → groupId
   final List<ApprovedGroup> approvedGroups;
-  final List<Participant> participants; // 번호 순 정렬
+  final List<Participant> participants;
 
   const SessionState({
     required this.sessionCode,
