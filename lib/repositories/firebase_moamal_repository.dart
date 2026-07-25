@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/approved_group.dart';
 import '../models/idea.dart';
 import '../models/session_state.dart';
 import 'moamal_repository.dart';
@@ -9,11 +10,13 @@ class FirebaseMoamalRepository implements MoamalRepository {
   StreamSubscription<DocumentSnapshot>? _sessionSub;
   StreamSubscription<QuerySnapshot>? _ideasSub;
   StreamSubscription<QuerySnapshot>? _votesSub;
+  StreamSubscription<QuerySnapshot>? _approvedGroupsSub;
 
-  // 세 컬렉션 최신값 캐싱 — Java 버전의 maybeEmit 패턴 그대로
+  // 네 컬렉션 최신값 캐싱 — Java 버전의 maybeEmit 패턴
   DocumentSnapshot? _latestSession;
   QuerySnapshot? _latestIdeas;
   QuerySnapshot? _latestVotes;
+  QuerySnapshot? _latestApprovedGroups;
   StreamController<SessionState>? _controller;
 
   FirebaseMoamalRepository({FirebaseFirestore? db})
@@ -80,6 +83,17 @@ class FirebaseMoamalRepository implements MoamalRepository {
     await batch.commit();
   }
 
+  @override
+  Future<void> approveGroups(
+      String sessionCode, List<ApprovedGroup> groups) async {
+    final ref = _sessionRef(sessionCode).collection('approvedGroups');
+    final batch = _db.batch();
+    for (final g in groups) {
+      batch.set(ref.doc(g.groupId), g.toFirestore());
+    }
+    await batch.commit();
+  }
+
   // ── Real-time subscription ─────────────────────────────────────────────────
 
   @override
@@ -89,6 +103,7 @@ class FirebaseMoamalRepository implements MoamalRepository {
     _latestSession = null;
     _latestIdeas = null;
     _latestVotes = null;
+    _latestApprovedGroups = null;
 
     final ref = _sessionRef(sessionCode);
 
@@ -107,6 +122,11 @@ class FirebaseMoamalRepository implements MoamalRepository {
       _maybeEmit();
     }, onError: _controller!.addError);
 
+    _approvedGroupsSub = ref.collection('approvedGroups').snapshots().listen((snap) {
+      _latestApprovedGroups = snap;
+      _maybeEmit();
+    }, onError: _controller!.addError);
+
     return _controller!.stream;
   }
 
@@ -115,9 +135,11 @@ class FirebaseMoamalRepository implements MoamalRepository {
     _sessionSub?.cancel();
     _ideasSub?.cancel();
     _votesSub?.cancel();
+    _approvedGroupsSub?.cancel();
     _sessionSub = null;
     _ideasSub = null;
     _votesSub = null;
+    _approvedGroupsSub = null;
     _controller?.close();
     _controller = null;
   }
@@ -126,7 +148,10 @@ class FirebaseMoamalRepository implements MoamalRepository {
 
   void _maybeEmit() {
     if (_controller == null || _controller!.isClosed) return;
-    if (_latestSession == null || _latestIdeas == null || _latestVotes == null) {
+    if (_latestSession == null ||
+        _latestIdeas == null ||
+        _latestVotes == null ||
+        _latestApprovedGroups == null) {
       return;
     }
     _controller!.add(_buildState());
@@ -148,6 +173,12 @@ class FirebaseMoamalRepository implements MoamalRepository {
       if (pid != null && gid != null) votes[pid] = gid;
     }
 
+    final approvedGroups = _latestApprovedGroups!.docs
+        .map((d) => ApprovedGroup.fromFirestore(
+            d.id, d.data() as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => a.approvedAt.compareTo(b.approvedAt));
+
     return SessionState(
       sessionCode: data?['sessionCode'] as String? ?? '',
       title: data?['title'] as String? ?? '',
@@ -155,6 +186,7 @@ class FirebaseMoamalRepository implements MoamalRepository {
       ownerUid: data?['ownerUid'] as String?,
       ideas: ideas,
       votes: votes,
+      approvedGroups: approvedGroups,
     );
   }
 }

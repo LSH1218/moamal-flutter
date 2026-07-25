@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/approved_group.dart';
 import '../../models/group.dart';
 import '../../models/session_state.dart';
 import '../../repositories/firebase_moamal_repository.dart';
@@ -31,6 +32,38 @@ class ClusterVoteScreen extends StatefulWidget {
 }
 
 class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
+  bool _isApproving = false;
+  bool _approved = false;
+
+  Future<void> _approveGroups(SessionState? session) async {
+    if (_isApproving || widget.groups.isEmpty) return;
+    setState(() => _isApproving = true);
+    try {
+      final now = DateTime.now();
+      final approvedBy = session?.ownerUid ?? '';
+      final toSave = widget.groups
+          .map((g) => ApprovedGroup(
+                groupId: g.id,
+                title: widget.groupingEngine.makeGroupTitle(g),
+                ideaIds: g.ideas.map((i) => i.id).toList(),
+                approvedAt: now,
+                approvedBy: approvedBy,
+                revision: 1,
+              ))
+          .toList();
+      await widget.repo.approveGroups(widget.sessionCode, toSave);
+      if (mounted) setState(() => _approved = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('승인 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isApproving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<SessionState>(
@@ -78,6 +111,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
     final ideaCount = session?.ideas.length ?? 0;
     final groupCount = widget.groups.length;
     final voteOpen = session?.voteOpen ?? false;
+    final hasApprovedGroups = session?.approvedGroups.isNotEmpty ?? false;
 
     return AppBar(
       backgroundColor: kGround,
@@ -102,15 +136,62 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
         ),
       ),
       actions: [
-        if (session != null)
+        if (session != null) ...[
+          // 그룹 승인 버튼 — 아직 승인하지 않았을 때만 표시
+          if (!hasApprovedGroups && !_approved && widget.groups.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _isApproving
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: kGreen),
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: () => _approveGroups(session),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: kGreen,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          '그룹 승인',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          // 승인 완료 배지
+          if (hasApprovedGroups || _approved)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Chip(
+                label: Text('승인됨',
+                    style: TextStyle(fontSize: 12, color: kGreen)),
+                backgroundColor: Color(0xFFE8F5E9),
+                side: BorderSide.none,
+                padding: EdgeInsets.symmetric(horizontal: 4),
+              ),
+            ),
+          // 투표 시작/닫기 버튼
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: () => widget.repo
-                  .setVoteOpen(widget.sessionCode, !voteOpen),
+              onTap: () =>
+                  widget.repo.setVoteOpen(widget.sessionCode, !voteOpen),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: voteOpen ? const Color(0xFFD32F2F) : kYellow,
                   borderRadius: BorderRadius.circular(20),
@@ -126,6 +207,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
               ),
             ),
           ),
+        ],
       ],
     );
   }

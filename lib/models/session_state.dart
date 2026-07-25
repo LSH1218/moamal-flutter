@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'approved_group.dart';
 import 'idea.dart';
 
 class SessionState {
@@ -8,6 +9,7 @@ class SessionState {
   final String? ownerUid;
   final List<Idea> ideas;
   final Map<String, String> votes; // participantId → groupId
+  final List<ApprovedGroup> approvedGroups;
 
   const SessionState({
     required this.sessionCode,
@@ -16,6 +18,7 @@ class SessionState {
     this.ownerUid,
     required this.ideas,
     required this.votes,
+    this.approvedGroups = const [],
   });
 
   factory SessionState.initial() => SessionState(
@@ -33,6 +36,7 @@ class SessionState {
     String? ownerUid,
     List<Idea>? ideas,
     Map<String, String>? votes,
+    List<ApprovedGroup>? approvedGroups,
   }) {
     return SessionState(
       sessionCode: sessionCode ?? this.sessionCode,
@@ -41,6 +45,7 @@ class SessionState {
       ownerUid: ownerUid ?? this.ownerUid,
       ideas: ideas ?? this.ideas,
       votes: votes ?? this.votes,
+      approvedGroups: approvedGroups ?? this.approvedGroups,
     );
   }
 
