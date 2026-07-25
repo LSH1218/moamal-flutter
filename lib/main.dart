@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
 import 'repositories/firebase_moamal_repository.dart';
 import 'services/auth_service.dart';
@@ -21,6 +22,10 @@ void main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
+
+  const kakaoKey = String.fromEnvironment('KAKAO_NATIVE_APP_KEY');
+
+  KakaoSdk.init(nativeAppKey: kakaoKey);
 
   await Firebase.initializeApp();
   await PromptConfig.init();

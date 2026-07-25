@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(sessionCode) {
+      return signedIn()
+          && get(/databases/$(database)/documents/sessions/$(sessionCode))
+               .data.ownerUid == request.auth.uid;
+    }
+
+    match /sessions/{sessionCode} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid;
+
+      allow update: if signedIn()
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+
+      allow delete: if signedIn()
+                    && resource.data.ownerUid == request.auth.uid;
+
+      match /ideas/{ideaId} {
+        allow read: if signedIn();
+        allow create, update: if signedIn();
+        allow delete: if isOwner(sessionCode);
+      }
+
+      match /votes/{participantId} {
+        allow read: if isOwner(sessionCode)
+                    || (signedIn() && request.auth.uid == participantId);
+        allow create, update: if signedIn()
+                               && request.auth.uid == participantId;
+        allow delete: if isOwner(sessionCode);
+      }
+
+      match /approvedGroups/{groupId} {
+        // 읽기: 인증된 모든 참가자 (학생 투표 화면에서 구독)
+        allow read: if signedIn();
+        // 쓰기: 교사만 (Functions Admin SDK는 규칙 우회)
+        allow create, update, delete: if isOwner(sessionCode);
+      }
+
+      match /participants/{uid} {
+        // 읽기: 교사(전체 명단) 또는 본인 문서
+        allow read: if isOwner(sessionCode)
+                    || (signedIn() && request.auth.uid == uid);
+        // 입장: 본인 문서만 생성·수정 가능
+        allow create, update: if signedIn()
+                               && request.auth.uid == uid;
+        // 삭제: 교사만 (세션 정리용)
+        allow delete: if isOwner(sessionCode);
+      }
+    }
+
+    // STT rate limit 문서 — Cloud Functions Admin SDK만 접근, 클라이언트 완전 차단
+    match /sttRateLimits/{doc} {
+      allow read, write: if false;
+    }
+
+    // Gemini rate limit 문서 — Cloud Functions Admin SDK만 접근, 클라이언트 완전 차단
+    match /geminiRateLimits/{doc} {
+      allow read, write: if false;
+    }
+  }
+}

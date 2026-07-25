@@ -1,17 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
-const _endpoint = 'https://api.openai.com/v1/audio/transcriptions';
-const _openAiKey =
-    String.fromEnvironment('OPENAI_API_KEY', defaultValue: '');
+const _defaultEndpoint =
+    'https://asia-northeast3-moamal-1e601.cloudfunctions.net/transcribeAudio';
+const _endpoint = String.fromEnvironment(
+  'STT_PROXY_URL',
+  defaultValue: _defaultEndpoint,
+);
 
 /// Java WhisperSttClient 1:1 이식.
 /// 녹음: record 패키지 (Android + iOS)
-/// 전사: OpenAI Whisper API (엔드포인트/파라미터 동일)
+/// 전사: Firebase Functions 프록시. OpenAI 키는 클라이언트에 두지 않는다.
 class WhisperSttClient {
   final _recorder = AudioRecorder();
   String? _tempPath;
@@ -54,24 +58,27 @@ class WhisperSttClient {
     if (!await file.exists()) throw Exception('녹음 파일이 없습니다.');
 
     try {
-      final request = http.MultipartRequest('POST', Uri.parse(_endpoint))
-        ..headers['Authorization'] = 'Bearer $_openAiKey'
-        ..fields['model'] = 'whisper-1'
-        ..fields['language'] = 'ko'
-        ..files.add(await http.MultipartFile.fromPath(
-          'file',
-          file.path,
-          filename: 'stt.m4a',
-        ));
-
-      final streamedResponse = await request.send();
-      final raw = await streamedResponse.stream.bytesToString();
-
-      if (streamedResponse.statusCode != 200) {
-        throw Exception('API 오류 ${streamedResponse.statusCode}: $raw');
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('로그인이 필요합니다.');
+      final idToken = await user.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('인증 토큰을 가져오지 못했습니다.');
       }
 
-      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final response = await http.post(
+        Uri.parse(_endpoint),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'audio/mp4',
+        },
+        body: await file.readAsBytes(),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('음성 변환에 실패했습니다. (${response.statusCode})');
+      }
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
       final text = json['text'] as String?;
       if (text == null || text.isEmpty) throw Exception('응답 파싱 실패');
       return text.trim();

@@ -1,4 +1,4 @@
-package com.moamal.moamal
+package com.moamal.prototype
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -5,6 +5,7 @@ import '../../models/meeting_report.dart';
 import '../../models/session_state.dart';
 import '../../services/gemini_grouping_engine.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class ReportScreen extends StatelessWidget {
   final SessionState session;
@@ -39,7 +40,7 @@ class ReportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.sizeOf(context).width < 600;
+    final isCompact = context.isCompact;
 
     return Scaffold(
       backgroundColor: kGround,

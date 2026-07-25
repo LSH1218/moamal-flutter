@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// local.properties에서 소셜 로그인 키를 읽어 manifestPlaceholders에 주입
+val localProps = Properties().also { props ->
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use(props::load)
 }
 
 android {
@@ -21,6 +29,15 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
+
+        // AndroidManifest.xml의 ${KAKAO_NATIVE_APP_KEY} 등을 local.properties 값으로 치환
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] =
+            localProps.getProperty("KAKAO_NATIVE_APP_KEY", "")
+        manifestPlaceholders["NAVER_CLIENT_ID"] =
+            localProps.getProperty("NAVER_CLIENT_ID", "")
+        manifestPlaceholders["NAVER_CLIENT_SECRET"] =
+            localProps.getProperty("NAVER_CLIENT_SECRET", "")
     }
 
     buildTypes {

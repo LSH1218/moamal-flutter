@@ -1,5 +1,7 @@
 import 'dart:math';
+import 'approved_group.dart';
 import 'idea.dart';
+import 'participant.dart';
 
 class SessionState {
   final String sessionCode;
@@ -8,6 +10,8 @@ class SessionState {
   final String? ownerUid;
   final List<Idea> ideas;
   final Map<String, String> votes; // participantId → groupId
+  final List<ApprovedGroup> approvedGroups;
+  final List<Participant> participants; // 번호 순 정렬
 
   const SessionState({
     required this.sessionCode,
@@ -16,6 +20,8 @@ class SessionState {
     this.ownerUid,
     required this.ideas,
     required this.votes,
+    this.approvedGroups = const [],
+    this.participants = const [],
   });
 
   factory SessionState.initial() => SessionState(
@@ -33,6 +39,8 @@ class SessionState {
     String? ownerUid,
     List<Idea>? ideas,
     Map<String, String>? votes,
+    List<ApprovedGroup>? approvedGroups,
+    List<Participant>? participants,
   }) {
     return SessionState(
       sessionCode: sessionCode ?? this.sessionCode,
@@ -41,6 +49,8 @@ class SessionState {
       ownerUid: ownerUid ?? this.ownerUid,
       ideas: ideas ?? this.ideas,
       votes: votes ?? this.votes,
+      approvedGroups: approvedGroups ?? this.approvedGroups,
+      participants: participants ?? this.participants,
     );
   }
 

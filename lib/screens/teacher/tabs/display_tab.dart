@@ -5,6 +5,7 @@ import '../../../models/meeting_report.dart';
 import '../../../models/session_state.dart';
 import '../../../services/gemini_grouping_engine.dart';
 import '../../../theme/app_theme.dart';
+import '../../../utils/responsive.dart';
 import '../../../widgets/group_card.dart';
 import '../../../widgets/stat_row.dart';
 
@@ -60,11 +61,15 @@ class DisplayTab extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
-          QrImageView(
-            data: session.sessionCode,
-            version: QrVersions.auto,
-            size: 180,
-          ),
+          Builder(builder: (context) {
+            final size =
+                (MediaQuery.sizeOf(context).width * 0.38).clamp(140.0, 220.0);
+            return QrImageView(
+              data: session.sessionCode,
+              version: QrVersions.auto,
+              size: size,
+            );
+          }),
           const SizedBox(height: 10),
           const Text(
             '이 코드를 입력하거나 QR을 스캔해 참여하세요.',

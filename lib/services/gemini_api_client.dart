@@ -1,18 +1,18 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/group.dart';
 import '../models/idea.dart';
 import '../models/meeting_report.dart';
 import 'prompt_config.dart';
 
-const _model = 'gemini-2.0-flash-lite';
-
-// API 키: flutter run --dart-define=GEMINI_API_KEY=xxx 로 주입
-// 임시로 직접 넣는 경우 여기에 설정 (나중에 Firebase Functions로 이전 예정)
-const _apiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
-
-String get _endpoint =>
-    'https://generativelanguage.googleapis.com/v1beta/models/$_model:generateContent?key=$_apiKey';
+const _model = 'gemini-2.0-flash';
+const _defaultEndpoint =
+    'https://asia-northeast3-moamal-1e601.cloudfunctions.net/geminiProxy';
+const _endpoint = String.fromEnvironment(
+  'GEMINI_PROXY_URL',
+  defaultValue: _defaultEndpoint,
+);
 
 class GeminiApiClient {
   // ── 의견 클러스터링 ──────────────────────────────────────────────────────
@@ -54,17 +54,27 @@ class GeminiApiClient {
 
   // ── HTTP 공통 ────────────────────────────────────────────────────────────
 
-  Future<String> _call(Map<String, dynamic> body) async {
+  Future<String> _call(Map<String, dynamic> geminiBody) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('로그인이 필요합니다.');
+    final idToken = await user.getIdToken();
+
     final resp = await http.post(
       Uri.parse(_endpoint),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'model': _model, ...geminiBody}),
     );
+
+    if (resp.statusCode == 429) throw Exception('요청이 너무 많습니다. 잠시 후 다시 시도하세요.');
     if (resp.statusCode != 200) {
-      throw Exception('Gemini HTTP ${resp.statusCode}: ${resp.body}');
+      throw Exception('AI 요청 실패 (${resp.statusCode})');
     }
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    return data['candidates'][0]['content']['parts'][0]['text'] as String;
+
+    final json = jsonDecode(resp.body) as Map<String, dynamic>;
+    return json['text'] as String;
   }
 
   // ── Body builders ────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../utils/responsive.dart';
 import '../../models/group.dart';
 import '../../models/meeting_report.dart';
 import '../../models/session_state.dart';
@@ -14,7 +17,8 @@ import 'cluster_vote_screen.dart';
 import 'report_screen.dart';
 
 class TeacherHomeScreen extends StatefulWidget {
-  const TeacherHomeScreen({super.key});
+  final String? initialTitle;
+  const TeacherHomeScreen({super.key, this.initialTitle});
 
   @override
   State<TeacherHomeScreen> createState() => _TeacherHomeScreenState();
@@ -62,7 +66,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     _repo = context.read<FirebaseMoamalRepository>();
 
     final uid = _auth.currentUid!;
-    final newSession = _session.copyWith(ownerUid: uid);
+    var newSession = _session.copyWith(ownerUid: uid);
+    if (widget.initialTitle != null && widget.initialTitle!.isNotEmpty) {
+      newSession = newSession.copyWith(title: widget.initialTitle);
+    }
     await _repo.publishSession(newSession);
 
     _repo.listenToSession(newSession.sessionCode).listen((state) {
@@ -199,7 +206,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       );
     }
 
-    final isCompact = MediaQuery.sizeOf(context).width < 600;
+    final isCompact = context.isCompact;
 
     return Scaffold(
       backgroundColor: kGround,
@@ -234,12 +241,18 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             ],
           ),
           Text(
-            '$_elapsedText 경과 · 학생 ${_session.ideas.length}명 발언',
+            '$_elapsedText 경과 · 참여 ${_session.participants.length}명 · 발언 ${_session.ideas.length}건',
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
         ],
       ),
       actions: [
+        // 세션 코드 / QR 표시
+        IconButton(
+          icon: const Icon(Icons.qr_code),
+          tooltip: '세션 코드',
+          onPressed: () => _showQrSheet(),
+        ),
         // 의견 모음 화면으로
         IconButton(
           icon: const Icon(Icons.bubble_chart_outlined),
@@ -273,6 +286,17 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     );
   }
 
+  void _showQrSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      constraints: sheetConstraints(),
+      builder: (_) => _QrSheet(code: _session.sessionCode),
+    );
+  }
+
   void _goToReport() {
     Navigator.push(
       context,
@@ -292,23 +316,56 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 
   // ── Compact 바디: STT 박스 → Green 요약 패널 ─────────────────────────────
   Widget _buildCompactBody() {
+    final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
     return Column(
       children: [
+        if (_session.participants.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 32,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              scrollDirection: Axis.horizontal,
+              itemCount: _session.participants.length,
+              separatorBuilder: (context, i) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final p = _session.participants[i];
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE0DDD6)),
+                  ),
+                  child: Text(
+                    '${p.number}번 ${p.name}',
+                    style: const TextStyle(fontSize: 12, color: kInk, fontWeight: FontWeight.w500),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-          child: _SttBox(
-            transcript: _latestTranscript ??
-                (_session.ideas.isNotEmpty
-                    ? _session.ideas.last.text
-                    : null),
-            height: 130,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: 100,
+              maxHeight: (MediaQuery.sizeOf(context).height * 0.22).clamp(100, 160),
+            ),
+            child: _SttBox(
+              transcript: _latestTranscript ??
+                  (_session.ideas.isNotEmpty
+                      ? _session.ideas.last.text
+                      : null),
+            ),
           ),
         ),
         const SizedBox(height: 12),
         Expanded(
           child: Container(
             color: kGreen,
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 76),
             child: _SummaryPanel(
               groups: _groups,
               groupingEngine: _groupingEngine,
@@ -350,26 +407,29 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             ),
             // 오른쪽: STT + 학생 반응
             Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 80, 0),
-                      child: _SttBox(
-                        transcript: _latestTranscript ??
-                            (_session.ideas.isNotEmpty
-                                ? _session.ideas.last.text
-                                : null),
-                        height: double.infinity,
+              child: SafeArea(
+                top: false,
+                left: false,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 80, 0),
+                        child: _SttBox(
+                          transcript: _latestTranscript ??
+                              (_session.ideas.isNotEmpty
+                                  ? _session.ideas.last.text
+                                  : null),
+                          expand: true,
+                        ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                    child: _StudentReactionRow(session: _session),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                      child: _StudentReactionRow(session: _session),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -418,52 +478,54 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 // ── STT 실시간 음성 박스 ──────────────────────────────────────────────────
 class _SttBox extends StatelessWidget {
   final String? transcript;
-  final double height;
 
-  const _SttBox({required this.transcript, required this.height});
+  /// true: 부모(Expanded)가 높이를 결정 — Medium 레이아웃
+  /// false: 내용 기준 최소 높이 — Compact 레이아웃 (ConstrainedBox로 제한)
+  final bool expand;
+
+  const _SttBox({required this.transcript, this.expand = false});
 
   @override
   Widget build(BuildContext context) {
+    const label = Text(
+      '실시간 음성',
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: Colors.black38,
+      ),
+    );
+
+    final content = transcript == null || transcript!.isEmpty
+        ? const Align(
+            alignment: Alignment.topLeft,
+            child: Text(
+              '마이크 버튼을 길게 누르면\n발화가 여기에 표시됩니다.',
+              style: TextStyle(fontSize: 14, color: Colors.black38),
+            ),
+          )
+        : Text(
+            '"$transcript"',
+            style: const TextStyle(fontSize: 16, color: kInk, height: 1.55),
+          );
+
     return Container(
       width: double.infinity,
-      height: height,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '실시간 음성',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.black38,
+      child: expand
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [label, const SizedBox(height: 10), Expanded(child: content)],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [label, const SizedBox(height: 10), content],
             ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: transcript == null || transcript!.isEmpty
-                ? const Align(
-                    alignment: Alignment.topLeft,
-                    child: Text(
-                      '마이크 버튼을 길게 누르면\n발화가 여기에 표시됩니다.',
-                      style: TextStyle(fontSize: 14, color: Colors.black38),
-                    ),
-                  )
-                : Text(
-                    '"$transcript"',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: kInk,
-                      height: 1.55,
-                    ),
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -719,3 +781,139 @@ class _LiveBadgeState extends State<_LiveBadge>
 }
 
 enum _MicStatus { idle, recording, transcribing }
+
+// ── 세션 코드 QR 바텀시트 ─────────────────────────────────────────────────
+class _QrSheet extends StatelessWidget {
+  final String code;
+  const _QrSheet({required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              '학생 참여 코드',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final size =
+                    (constraints.maxWidth * 0.45).clamp(120.0, 200.0);
+                return QrImageView(
+                    data: code, size: size, version: QrVersions.auto);
+              },
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: code));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('코드가 복사됐습니다')),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: kGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  code,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 10,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '탭하면 코드가 복사됩니다',
+              style: TextStyle(fontSize: 12, color: Colors.black38),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _QrFullScreen(code: code),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.fullscreen),
+                label: const Text('전체 화면으로 보기 (학생 공유용)'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 전체화면 QR (교실 공유용) ────────────────────────────────────────────
+class _QrFullScreen extends StatelessWidget {
+  final String code;
+  const _QrFullScreen({required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: kGreen,
+        foregroundColor: Colors.white,
+        title: const Text('학생 참여 코드'),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final qrSize =
+              (constraints.maxWidth * 0.55).clamp(200.0, 380.0);
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                QrImageView(data: code, size: qrSize, version: QrVersions.auto),
+                const SizedBox(height: 32),
+                Text(
+                  code,
+                  style: const TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 14,
+                    color: Color(0xFF1B5E20),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'QR 코드를 스캔하거나 코드를 직접 입력하세요',
+                  style: TextStyle(fontSize: 14, color: Colors.black45),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

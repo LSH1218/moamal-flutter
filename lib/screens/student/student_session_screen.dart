@@ -7,6 +7,7 @@ import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/whisper_stt_client.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class StudentSessionScreen extends StatefulWidget {
   final String sessionCode;
@@ -116,7 +117,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
           );
         }
         final state = snapshot.data!;
-        final isCompact = MediaQuery.sizeOf(context).width < 600;
+        final isCompact = context.isCompact;
 
         return Scaffold(
           backgroundColor: kGround,
@@ -486,7 +487,7 @@ class _WaitingInfo extends StatelessWidget {
   }
 }
 
-// ── 투표 카드 목록 ────────────────────────────────────────────────────────
+// ── 투표 카드 목록 (승인된 그룹 기반) ────────────────────────────────────
 class _VoteList extends StatelessWidget {
   final SessionState state;
   final String? myVote;
@@ -502,23 +503,28 @@ class _VoteList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.ideas.isEmpty) {
+    final groups = state.approvedGroups;
+
+    if (groups.isEmpty) {
       return const Center(
-        child: Text('아직 의견이 없습니다.',
-            style: TextStyle(color: Colors.black38)),
+        child: Text(
+          '교사가 그룹을 승인하면\n여기에 표시됩니다.',
+          style: TextStyle(color: Colors.black38),
+          textAlign: TextAlign.center,
+        ),
       );
     }
 
     return ListView.separated(
       padding: padding,
-      itemCount: state.ideas.length,
+      itemCount: groups.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
-        final idea = state.ideas[index];
-        final isSelected = myVote == idea.id;
+        final group = groups[index];
+        final isSelected = myVote == group.groupId;
 
         return GestureDetector(
-          onTap: () => onVote(idea.id),
+          onTap: () => onVote(group.groupId),
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -529,14 +535,31 @@ class _VoteList extends StatelessWidget {
                 width: 1.5,
               ),
             ),
-            child: Text(
-              idea.text,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : kInk,
-              ),
-              textAlign: TextAlign.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  group.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : kInk,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (group.ideaIds.length > 1) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${group.ideaIds.length}개 의견',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : Colors.black38,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         );

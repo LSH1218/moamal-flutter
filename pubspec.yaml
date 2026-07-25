@@ -42,6 +42,10 @@ dependencies:
   # Google Sign-In (교사 로그인)
   google_sign_in: ^6.2.2
 
+  # 소셜 로그인 (교사 — 카카오 / 네이버)
+  kakao_flutter_sdk_user: ^1.9.7
+  flutter_naver_login: ^2.1.1
+
   # QR
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.0.1
