@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../../models/group.dart';
 import '../../../models/idea.dart';
+import '../../../models/participant.dart';
 import '../../../models/session_state.dart';
 import '../../../repositories/firebase_moamal_repository.dart';
 import '../../../services/gemini_grouping_engine.dart';
@@ -140,6 +141,24 @@ class _StudentTabState extends State<StudentTab> {
         ),
         const SizedBox(height: 12),
         _Panel(
+          title: '학생 마이크 제어',
+          child: widget.session.participants.isEmpty
+              ? const Text(
+                  '아직 참여한 학생이 없습니다.',
+                  style: TextStyle(color: Colors.black38),
+                )
+              : Column(
+                  children: widget.session.participants
+                      .map((p) => _ParticipantRow(
+                            participant: p,
+                            onForceStop: () => widget.repo.forceStopMic(
+                                widget.session.sessionCode, p.uid),
+                          ))
+                      .toList(),
+                ),
+        ),
+        const SizedBox(height: 12),
+        _Panel(
           title: '의견 묶음 ${widget.groups.length}개',
           child: widget.groups.isEmpty
               ? const Text(
@@ -162,6 +181,44 @@ class _StudentTabState extends State<StudentTab> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _ParticipantRow extends StatelessWidget {
+  final Participant participant;
+  final VoidCallback onForceStop;
+
+  const _ParticipantRow({
+    required this.participant,
+    required this.onForceStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              participant.displayName,
+              style: const TextStyle(fontSize: 14, color: kInk),
+            ),
+          ),
+          OutlinedButton(
+            onPressed: onForceStop,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFD32F2F),
+              side: const BorderSide(color: Color(0xFFD32F2F)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('중지', style: TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -4,8 +4,8 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-07-25
-- 갱신한 역할: AI/백엔드 (Cloud Functions 배포 완료)
+- 마지막 갱신일: 2026-07-29
+- 갱신한 역할: STT (Flutter STT MVP 6단계 구현)
 - 기준 Flutter 커밋: `95460d7` (feat: Firebase Cloud Functions 백엔드 추가 및 보안 강화)
 
 ## 1. 경영 요약
@@ -93,6 +93,8 @@
 
 ## 8. 대화방별 다음 행동
 
+- **STT**: `flutter analyze` 통과 확인 → Android 실기기 STT 엔드투엔드 테스트 → VAD 임계값 튜닝 → iOS 권한 plist 확인
+- **AI/백엔드**: `transcribeAudio` Functions에 `req.query.language` / `req.query.prompt` 파라미터 처리 추가 후 재배포
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
 - **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
 - **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
@@ -102,11 +104,58 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-07-29 | STT | Flutter STT MVP 6단계 구현 (아래 §11 참조) |
 | 2026-07-25 | AI/백엔드 | Cloud Functions 4개 배포(transcribeAudio, geminiProxy, kakaoVerify, naverVerify), Firestore 보안 규칙 배포, Secret Manager 설정 완료 |
 | 2026-07-22 | Flutter UI/UX | 전체 UI 반응형 리팩토링 (compact/medium 2단계, responsive.dart 신규) |
 | 2026-07-20 | Flutter UI/UX | Flutter Android 실기기 1차 실행 성공: 랜딩 화면 정상 렌더링, 학생 참여 화면 전환 확인 |
 | 2026-07-18 | AI/백엔드 | STT 서버 프록시 코드 구현, Blaze 업그레이드 결정 |
 | 2026-07-17 | App 개발 | ApprovedGroup 모델, approveGroups(), ClusterVoteScreen 승인 버튼, 학생 그룹 투표 연결 |
+
+## 11. STT Flutter MVP (2026-07-29)
+
+### 확정된 설계 결정
+
+- STT 엔진: **Whisper API Batch** (스트리밍 아님 — Partial/Ring Buffer 설계 제외)
+- 발화 확정 UX: **Toggle(탭) + PTT(길게 누르기) 하이브리드**
+- 전사 후 흐름: **학생 편집 초안 화면 → 수정 or 재녹음 → 제출** (자동 즉시 제출 없음)
+
+### 구현 완료 (코드 반영, 실기기 검증 전)
+
+| 단계 | 파일 | 내용 |
+|------|------|------|
+| 1. STT 호출 완성 | `whisper_stt_client.dart` | `language: 'ko'` + `prompt`(수업 키워드 10개) 쿼리 파라미터 추가. 재시도: 최대 3회, 지수 백오프(1→2초). 5xx·네트워크 오류만 재시도, 4xx 즉시 실패. 30초 타임아웃. 파일은 재시도 전 과정 후 단 1회 삭제. |
+| 2. 편집 초안 화면 | `widgets/draft_sheet.dart`, `student_session_screen.dart` | STT 완료 후 바로 제출 대신 바텀시트 표시. 학생이 텍스트 수정 후 [제출] or [다시 녹음] 선택. `_lastTranscript`는 초안이 아닌 실제 제출 텍스트로 갱신. |
+| 3. Toggle + PTT 하이브리드 | `student_session_screen.dart` | `_onTap`: idle→토글 시작, 토글 녹음 중→종료. `_onLongPressStart`: idle→PTT 시작. `_onLongPressEnd`: PTT 모드일 때만 종료. `_SpeakCard` 힌트: 상태·모드별 3종. |
+| 4. VAD Silence Auto-Pause | `whisper_stt_client.dart`, `student_session_screen.dart` | `amplitudeStream`(200ms 간격, dBFS) 노출. 토글 모드 전용. -40 dBFS 미만 3초 지속 시 자동 종료. PTT 모드는 VAD 미적용. |
+| 5. Teacher 마이크 강제 중지 | `moamal_repository.dart`, `firebase_moamal_repository.dart`, `student_session_screen.dart`, `student_tab.dart` | Firestore `participants/{uid}/forceStop: bool`. 교사 화면: "학생 마이크 제어" 패널 + [중지] 버튼. 학생 앱: 실시간 리스너 → VAD 중단 → 녹음 취소 → 스낵바 → `clearForceStop`. |
+| 6. 편집 초안 화면 (학생용) | 위 2단계와 동일 | —  |
+
+### 미검증 플랫폼
+
+- Android 실기기 빌드 및 STT 호출 엔드투엔드 (Functions 미배포 상태)
+- iOS (record 패키지 AVAudioSession 권한 설정, `NSSpeechRecognitionUsageDescription` plist 미확인)
+- VAD 침묵 임계값(-40 dBFS, 3초): 실제 교실 소음에서 튜닝 필요
+
+### Firestore 변경: participants 스키마
+
+```
+sessions/{sessionCode}/participants/{uid}
+  forceStop: bool   ← 기존 없음, 신규 추가
+             true  = 교사가 강제 중지 요청
+             false = 학생이 처리 완료(acknowledge)
+```
+
+### 프록시 측 추가 작업 필요
+
+`transcribeAudio` Functions 코드에서 `req.query.language`와 `req.query.prompt`를 읽어 Whisper API 호출 시 전달해야 한다. 현재 미반영.
+
+### STT VAD 튜닝 파라미터 위치
+
+`student_session_screen.dart`
+- `_silenceThresholdDb = -40.0` — 교실 소음이 크면 -30 ~ -35로 조정
+- `_silenceSec = 3` — 학생 발화 간격 보고 조정
+
+---
 
 ## 10. Firestore approvedGroups 스키마 계약
 

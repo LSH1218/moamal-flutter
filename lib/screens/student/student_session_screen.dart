@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -8,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../services/whisper_stt_client.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
+import '../../widgets/draft_sheet.dart';
 
 class StudentSessionScreen extends StatefulWidget {
   final String sessionCode;
@@ -24,17 +26,55 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
   final _sttClient = WhisperSttClient();
   String? _myVote;
   _MicStatus _micStatus = _MicStatus.idle;
+  bool _isToggleMode = false;
   String? _lastTranscript;
+
+  // VAD
+  StreamSubscription<double>? _amplitudeSub;
+  DateTime? _lastSpeechTime;
+
+  // Teacher force stop
+  StreamSubscription<bool>? _forceStopSub;
+  // dBFS 기준: -40 이하를 침묵으로 판단. 교실 소음 환경에 따라 조정 필요.
+  static const double _silenceThresholdDb = -40.0;
+  static const int _silenceSec = 3;
 
   @override
   void initState() {
     super.initState();
     _repo = context.read<FirebaseMoamalRepository>();
     _auth = context.read<AuthService>();
+    _listenForceStop();
+  }
+
+  void _listenForceStop() {
+    final uid = _auth.currentUid;
+    if (uid == null) return;
+    _forceStopSub = _repo
+        .listenToForceStop(widget.sessionCode, uid)
+        .listen((forceStop) {
+      if (forceStop && mounted) _handleForceStop(uid);
+    });
+  }
+
+  Future<void> _handleForceStop(String uid) async {
+    _stopVAD();
+    if (_micStatus == _MicStatus.recording) {
+      await _sttClient.cancel();
+      if (mounted) setState(() => _micStatus = _MicStatus.idle);
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('선생님이 녹음을 마쳤어요.')),
+      );
+    }
+    await _repo.clearForceStop(widget.sessionCode, uid);
   }
 
   @override
   void dispose() {
+    _stopVAD();
+    _forceStopSub?.cancel();
     _repo.stopListening();
     _sttClient.dispose();
     super.dispose();
@@ -59,17 +99,36 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
     try {
       final text = await _sttClient.stopAndTranscribe();
       if (mounted) {
-        setState(() => _lastTranscript = text);
-        _submitIdea(text);
+        setState(() => _micStatus = _MicStatus.idle);
+        await _showDraftSheet(text);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
+        setState(() => _micStatus = _MicStatus.idle);
       }
-    } finally {
-      if (mounted) setState(() => _micStatus = _MicStatus.idle);
     }
+  }
+
+  Future<void> _showDraftSheet(String sttText) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      constraints: sheetConstraints(),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraftSheet(
+        initialText: sttText,
+        onSubmit: (text) {
+          Navigator.pop(ctx);
+          setState(() => _lastTranscript = text);
+          _submitIdea(text);
+        },
+        onReRecord: () => Navigator.pop(ctx),
+      ),
+    );
   }
 
   Future<void> _cancelRecording() async {
@@ -81,6 +140,64 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
           const SnackBar(content: Text('너무 짧게 눌렀습니다.')),
         );
       }
+    }
+  }
+
+  // ── VAD ───────────────────────────────────────────────────────────────
+
+  void _startVAD() {
+    _lastSpeechTime = DateTime.now();
+    _amplitudeSub = _sttClient.amplitudeStream.listen((db) {
+      if (!mounted) return;
+      if (db > _silenceThresholdDb) {
+        _lastSpeechTime = DateTime.now();
+      } else {
+        final silence = DateTime.now().difference(_lastSpeechTime!);
+        if (silence.inSeconds >= _silenceSec) {
+          _stopVAD();
+          _stopAndTranscribe();
+        }
+      }
+    });
+  }
+
+  void _stopVAD() {
+    _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    _lastSpeechTime = null;
+  }
+
+  // ── 제스처 핸들러 ──────────────────────────────────────────────────────
+
+  /// 탭: idle이면 토글 녹음 시작 + VAD 구독, 토글 녹음 중이면 VAD 해제 후 종료
+  Future<void> _onTap() async {
+    if (_micStatus == _MicStatus.idle) {
+      _isToggleMode = true;
+      await _startRecording();
+      if (_micStatus == _MicStatus.recording) _startVAD();
+    } else if (_micStatus == _MicStatus.recording && _isToggleMode) {
+      _stopVAD();
+      await _stopAndTranscribe();
+    }
+  }
+
+  /// 길게 누름 시작: idle일 때만 PTT 녹음 시작
+  Future<void> _onLongPressStart() async {
+    if (_micStatus != _MicStatus.idle) return;
+    _isToggleMode = false;
+    await _startRecording();
+  }
+
+  /// 길게 누름 종료: PTT 모드일 때만 종료
+  Future<void> _onLongPressEnd() async {
+    if (_micStatus != _MicStatus.recording || _isToggleMode) return;
+    await _stopAndTranscribe();
+  }
+
+  /// 길게 누름 취소: PTT 모드일 때만 취소
+  Future<void> _onLongPressCancel() async {
+    if (_micStatus == _MicStatus.recording && !_isToggleMode) {
+      await _cancelRecording();
     }
   }
 
@@ -127,20 +244,24 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
                   state: state,
                   myVote: _myVote,
                   micStatus: _micStatus,
+                  isToggleMode: _isToggleMode,
                   lastTranscript: _lastTranscript,
-                  onMicStart: _startRecording,
-                  onMicStop: _stopAndTranscribe,
-                  onMicCancel: _cancelRecording,
+                  onMicTap: _onTap,
+                  onMicLongPressStart: _onLongPressStart,
+                  onMicLongPressEnd: _onLongPressEnd,
+                  onMicLongPressCancel: _onLongPressCancel,
                   onVote: _castVote,
                 )
               : _MediumBody(
                   state: state,
                   myVote: _myVote,
                   micStatus: _micStatus,
+                  isToggleMode: _isToggleMode,
                   lastTranscript: _lastTranscript,
-                  onMicStart: _startRecording,
-                  onMicStop: _stopAndTranscribe,
-                  onMicCancel: _cancelRecording,
+                  onMicTap: _onTap,
+                  onMicLongPressStart: _onLongPressStart,
+                  onMicLongPressEnd: _onLongPressEnd,
+                  onMicLongPressCancel: _onLongPressCancel,
                   onVote: _castVote,
                 ),
         );
@@ -205,20 +326,24 @@ class _CompactBody extends StatelessWidget {
   final SessionState state;
   final String? myVote;
   final _MicStatus micStatus;
+  final bool isToggleMode;
   final String? lastTranscript;
-  final VoidCallback onMicStart;
-  final VoidCallback onMicStop;
-  final VoidCallback onMicCancel;
+  final VoidCallback onMicTap;
+  final VoidCallback onMicLongPressStart;
+  final VoidCallback onMicLongPressEnd;
+  final VoidCallback onMicLongPressCancel;
   final void Function(String) onVote;
 
   const _CompactBody({
     required this.state,
     required this.myVote,
     required this.micStatus,
+    required this.isToggleMode,
     required this.lastTranscript,
-    required this.onMicStart,
-    required this.onMicStop,
-    required this.onMicCancel,
+    required this.onMicTap,
+    required this.onMicLongPressStart,
+    required this.onMicLongPressEnd,
+    required this.onMicLongPressCancel,
     required this.onVote,
   });
 
@@ -230,10 +355,12 @@ class _CompactBody extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 16, 14, 0),
           child: _SpeakCard(
             micStatus: micStatus,
+            isToggleMode: isToggleMode,
             lastTranscript: lastTranscript,
-            onStart: onMicStart,
-            onStop: onMicStop,
-            onCancel: onMicCancel,
+            onTap: onMicTap,
+            onLongPressStart: onMicLongPressStart,
+            onLongPressEnd: onMicLongPressEnd,
+            onLongPressCancel: onMicLongPressCancel,
           ),
         ),
         if (state.voteOpen) ...[
@@ -270,20 +397,24 @@ class _MediumBody extends StatelessWidget {
   final SessionState state;
   final String? myVote;
   final _MicStatus micStatus;
+  final bool isToggleMode;
   final String? lastTranscript;
-  final VoidCallback onMicStart;
-  final VoidCallback onMicStop;
-  final VoidCallback onMicCancel;
+  final VoidCallback onMicTap;
+  final VoidCallback onMicLongPressStart;
+  final VoidCallback onMicLongPressEnd;
+  final VoidCallback onMicLongPressCancel;
   final void Function(String) onVote;
 
   const _MediumBody({
     required this.state,
     required this.myVote,
     required this.micStatus,
+    required this.isToggleMode,
     required this.lastTranscript,
-    required this.onMicStart,
-    required this.onMicStop,
-    required this.onMicCancel,
+    required this.onMicTap,
+    required this.onMicLongPressStart,
+    required this.onMicLongPressEnd,
+    required this.onMicLongPressCancel,
     required this.onVote,
   });
 
@@ -303,10 +434,12 @@ class _MediumBody extends StatelessWidget {
                 Expanded(
                   child: _SpeakCard(
                     micStatus: micStatus,
+                    isToggleMode: isToggleMode,
                     lastTranscript: lastTranscript,
-                    onStart: onMicStart,
-                    onStop: onMicStop,
-                    onCancel: onMicCancel,
+                    onTap: onMicTap,
+                    onLongPressStart: onMicLongPressStart,
+                    onLongPressEnd: onMicLongPressEnd,
+                    onLongPressCancel: onMicLongPressCancel,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -363,17 +496,21 @@ class _MediumBody extends StatelessWidget {
 // ── 발표하기 카드 ─────────────────────────────────────────────────────────
 class _SpeakCard extends StatelessWidget {
   final _MicStatus micStatus;
+  final bool isToggleMode;
   final String? lastTranscript;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
-  final VoidCallback onCancel;
+  final VoidCallback onTap;
+  final VoidCallback onLongPressStart;
+  final VoidCallback onLongPressEnd;
+  final VoidCallback onLongPressCancel;
 
   const _SpeakCard({
     required this.micStatus,
+    required this.isToggleMode,
     required this.lastTranscript,
-    required this.onStart,
-    required this.onStop,
-    required this.onCancel,
+    required this.onTap,
+    required this.onLongPressStart,
+    required this.onLongPressEnd,
+    required this.onLongPressCancel,
   });
 
   @override
@@ -388,15 +525,16 @@ class _SpeakCard extends StatelessWidget {
             : kGreen;
 
     final statusText = isRecording
-        ? '녹음 중 · 손을 떼면 전송'
+        ? (isToggleMode ? '녹음 중 · 다시 탭하면 전송' : '녹음 중 · 손을 떼면 전송')
         : isTranscribing
             ? '변환 중...'
-            : '버튼을 눌러 말하기 시작';
+            : '탭하거나 길게 눌러 말하기';
 
     return GestureDetector(
-      onLongPressStart: isTranscribing ? null : (_) => onStart(),
-      onLongPressEnd: isTranscribing ? null : (_) => onStop(),
-      onLongPressCancel: isTranscribing ? null : () => onCancel(),
+      onTap: isTranscribing ? null : onTap,
+      onLongPressStart: isTranscribing ? null : (_) => onLongPressStart(),
+      onLongPressEnd: isTranscribing ? null : (_) => onLongPressEnd(),
+      onLongPressCancel: isTranscribing ? null : onLongPressCancel,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
