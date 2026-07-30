@@ -104,6 +104,7 @@ joinedAt: Timestamp
 - **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/transcribeAudio`
 - **인증**: `Authorization: Bearer {Firebase ID Token}`
 - **Content-Type**: `audio/mp4` (최대 10MB)
+- **쿼리 파라미터**: `?language=ko&prompt=수업키워드` (prompt 최대 500자, 없으면 생략)
 - **Rate limit**: 분당 10회 (uid 기준)
 - **응답**: `{ "text": "..." }`
 
