@@ -5,8 +5,8 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-07-30
-- 갱신한 역할: AI 의견구조화 (그룹화 품질 개선 4건)
-- 기준 Flutter 커밋: `8779141` (feat(stt): 2계층 동적 Whisper prompt 생성) — AI 변경은 커밋 전
+- 갱신한 역할: AI 의견구조화 (그룹화 품질 개선 6건)
+- 기준 Flutter 커밋: `81efb0e` (fix(ai): Gemini 호출 타임아웃 추가 및 마크다운 래퍼 제거)
 
 ## 1. 경영 요약
 
@@ -104,7 +104,8 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
-| 2026-07-30 | AI 의견구조화 | 그룹화 품질 개선 4건 (아래 §13 참조) |
+| 2026-07-30 | AI 의견구조화 | Gemini 타임아웃(10초) + 마크다운 래퍼 제거 (§13 참조) |
+| 2026-07-30 | AI 의견구조화 | 그룹화 품질 개선 4건 (§13 참조) |
 | 2026-07-30 | STT | 2계층 동적 Whisper prompt 구현 (아래 §12 참조) |
 | 2026-07-30 | AI/백엔드 | transcribeAudio Functions에 req.query.prompt 처리 추가 및 재배포 완료 |
 | 2026-07-29 | STT | Flutter STT MVP 6단계 구현 (아래 §11 참조) |
@@ -232,6 +233,8 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | 2 | `gemini_grouping_engine.dart` | `_stableGroupId()` 임계값 `> 0` → `>= ceil(ideas.length/2).clamp(2, ideas.length)` | 1개만 겹쳐도 ID 재사용하던 버그 수정 — 투표 집계 오류 방지 |
 | 3 | `gemini_api_client.dart`, `gemini_grouping_engine.dart`, `teacher_home_screen.dart` | 그룹화 요청에 `sessionTitle` 추가 (`수업 주제: ...` 첫 줄) | AI가 주제 맥락 없이 그룹화하던 문제 해결 — 제목·분류 품질 향상 |
 | 4 | `gemini_grouping_engine.dart`, `cluster_vote_screen.dart` | `freeze()` 메서드 추가, 승인 성공 시 호출 | 승인 후 새 의견이 들어와도 그룹 재편 차단 — 투표 집계 안정성 보장 |
+| 5 | `gemini_api_client.dart` | `http.post`에 `.timeout(Duration(seconds: 10))` 추가 | 교실 Wi-Fi 불안정 시 무한 대기 방지 — 타임아웃 시 폴백 유지 |
+| 6 | `gemini_api_client.dart` | `_stripMarkdown()` 추가 — ` ```json...``` ` 래퍼 전처리 | Gemini가 마크다운 래퍼를 붙일 때 jsonDecode 실패 방지 |
 
 ### 현재 AI 그룹화 동작 (코드 기준, 실기기 미검증)
 
@@ -246,6 +249,6 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 
 | 위험 | 영향 | 상태 |
 |---|---|---|
-| Gemini 실패 시 교사 화면에 상태 미표시 | 낮음 | 계획/미구현 |
-| Jaccard 폴백 → Gemini 전환 시 그룹 목록 갑작스러운 재배열 | 낮음 | 계획/미구현 |
+| Gemini 실패 시 교사 화면에 상태 미표시 | 낮음 | 계획/미구현 — 폴백이 작동하므로 파일럿 후 대응 |
+| Jaccard 폴백 → Gemini 전환 시 그룹 목록 갑작스러운 재배열 | 낮음 | 미관 문제, 후순위 |
 | 브리핑 maxOutputTokens 256 — 긴 제목/그룹에서 절단 가능성 | 낮음 | 모니터링 |
