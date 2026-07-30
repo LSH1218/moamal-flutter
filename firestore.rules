@@ -50,12 +50,20 @@ service cloud.firestore {
         // 읽기: 교사(전체 명단) 또는 본인 문서
         allow read: if isOwner(sessionCode)
                     || (signedIn() && request.auth.uid == uid);
-        // 입장: 본인 문서만 생성·수정 가능
-        allow create, update: if signedIn()
-                               && request.auth.uid == uid;
+        // 입장: 본인 문서만 생성·수정 가능, 교사는 forceStop 제어용으로 수정 가능
+        allow create, update: if (signedIn() && request.auth.uid == uid)
+                               || isOwner(sessionCode);
         // 삭제: 교사만 (세션 정리용)
         allow delete: if isOwner(sessionCode);
       }
+    }
+
+    // 교사 화이트리스트 — 로그인한 사용자만 본인 문서 읽기 가능, 쓰기는 Admin SDK만
+    match /whitelisted_teachers/{docId} {
+      allow read: if signedIn()
+                  && (request.auth.token.email == docId
+                      || request.auth.uid == docId);
+      allow write: if false;
     }
 
     // STT rate limit 문서 — Cloud Functions Admin SDK만 접근, 클라이언트 완전 차단
