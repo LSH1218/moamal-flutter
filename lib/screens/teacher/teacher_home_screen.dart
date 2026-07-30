@@ -176,7 +176,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     if (_micStatus != _MicStatus.recording) return;
     setState(() => _micStatus = _MicStatus.transcribing);
     try {
-      final text = await _sttClient.stopAndTranscribe();
+      final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_session.title));
       if (mounted) setState(() => _latestTranscript = text);
     } catch (e) {
       if (mounted) {

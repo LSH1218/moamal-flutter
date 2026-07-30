@@ -118,6 +118,7 @@ class _StudentTabState extends State<StudentTab> {
                   Expanded(
                     child: MicButton(
                       sttClient: _sttClient,
+                      prompt: buildWhisperPrompt(widget.session.title),
                       onResult: (text) {
                         final current = _ideaCtrl.text.trim();
                         _ideaCtrl.text =

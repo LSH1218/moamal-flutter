@@ -28,6 +28,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
   _MicStatus _micStatus = _MicStatus.idle;
   bool _isToggleMode = false;
   String? _lastTranscript;
+  String _sessionTitle = '';
 
   // VAD
   StreamSubscription<double>? _amplitudeSub;
@@ -97,7 +98,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
     if (_micStatus != _MicStatus.recording) return;
     setState(() => _micStatus = _MicStatus.transcribing);
     try {
-      final text = await _sttClient.stopAndTranscribe();
+      final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_sessionTitle));
       if (mounted) {
         setState(() => _micStatus = _MicStatus.idle);
         await _showDraftSheet(text);
@@ -234,6 +235,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
           );
         }
         final state = snapshot.data!;
+        _sessionTitle = state.title;
         final isCompact = context.isCompact;
 
         return Scaffold(

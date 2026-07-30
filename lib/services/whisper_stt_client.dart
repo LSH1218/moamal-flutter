@@ -17,9 +17,25 @@ const _endpoint = String.fromEnvironment(
 const _maxRetries = 3;
 const _proxyTimeout = Duration(seconds: 30);
 
-// 프록시가 language/prompt 쿼리 파라미터를 지원해야 한다.
 const _sttLanguage = 'ko';
-const _sttPrompt = '수업, 선생님, 학생, 의견, 발표, 질문, 생각, 이유, 문제, 중요';
+
+/// 세션 제목에서 수업 유형(Layer 1)과 주제(Layer 2)를 조합해 Whisper prompt를 생성한다.
+String buildWhisperPrompt(String sessionTitle) {
+  final String context;
+  if (sessionTitle.contains('토론') || sessionTitle.contains('토의')) {
+    context = '초·중등 학생들의 토론 수업 음성입니다. 찬성, 반대, 주장, 근거, 반론 등의 단어가 사용됩니다.';
+  } else if (sessionTitle.contains('발표') || sessionTitle.contains('조사')) {
+    context = '학생들의 주제 발표 및 조사 내용 공유 음성입니다. 조사, 발표, 자료, 첫째, 결론 등의 단어가 사용됩니다.';
+  } else if (sessionTitle.contains('회의')) {
+    context = '학급 회의 음성입니다. 안건, 동의, 표결 등의 단어가 사용됩니다.';
+  } else if (sessionTitle.contains('심포지엄')) {
+    context = '학생 심포지엄 음성입니다. 연구, 발표, 질문, 답변 등의 단어가 사용됩니다.';
+  } else {
+    context = '초·중등 수업 현장의 학생 발화 음성입니다.';
+  }
+  final topic = sessionTitle.isNotEmpty ? ' 수업 주제: "$sessionTitle"' : '';
+  return '$context$topic';
+}
 
 class WhisperSttClient {
   final _recorder = AudioRecorder();
@@ -47,7 +63,7 @@ class WhisperSttClient {
   }
 
   /// 녹음 중지 후 Whisper 전사. 네트워크 실패 시 최대 3회 재시도.
-  Future<String> stopAndTranscribe() async {
+  Future<String> stopAndTranscribe(String prompt) async {
     if (!_recording) throw Exception('녹음 중이 아닙니다.');
 
     final path = await _recorder.stop();
@@ -60,14 +76,14 @@ class WhisperSttClient {
     if (!await file.exists()) throw Exception('녹음 파일이 없습니다.');
 
     try {
-      return await _transcribeWithRetry(file);
+      return await _transcribeWithRetry(file, prompt);
     } finally {
       // 성공·실패 무관하게 재시도 끝난 뒤 파일 삭제
       if (await file.exists()) await file.delete();
     }
   }
 
-  Future<String> _transcribeWithRetry(File file) async {
+  Future<String> _transcribeWithRetry(File file, String prompt) async {
     Exception? lastError;
 
     for (int attempt = 0; attempt < _maxRetries; attempt++) {
@@ -77,7 +93,7 @@ class WhisperSttClient {
       }
 
       try {
-        return await _callProxy(file);
+        return await _callProxy(file, prompt);
       } on _RetryableException catch (e) {
         lastError = Exception(e.message);
       } on Exception {
@@ -88,7 +104,7 @@ class WhisperSttClient {
     throw lastError ?? Exception('음성 변환에 실패했습니다.');
   }
 
-  Future<String> _callProxy(File file) async {
+  Future<String> _callProxy(File file, String prompt) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('로그인이 필요합니다.');
 
@@ -99,7 +115,7 @@ class WhisperSttClient {
 
     final uri = Uri.parse(_endpoint).replace(queryParameters: {
       'language': _sttLanguage,
-      'prompt': _sttPrompt,
+      'prompt': prompt,
     });
 
     final http.Response response;

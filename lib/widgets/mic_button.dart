@@ -8,12 +8,14 @@ class MicButton extends StatefulWidget {
   final WhisperSttClient sttClient;
   final void Function(String text) onResult;
   final void Function(String message) onError;
+  final String prompt;
 
   const MicButton({
     super.key,
     required this.sttClient,
     required this.onResult,
     required this.onError,
+    this.prompt = '',
   });
 
   @override
@@ -90,7 +92,7 @@ class _MicButtonState extends State<MicButton> {
     if (_status != _Status.recording) return;
     setState(() => _status = _Status.transcribing);
     try {
-      final text = await widget.sttClient.stopAndTranscribe();
+      final text = await widget.sttClient.stopAndTranscribe(widget.prompt);
       widget.onResult(text);
     } catch (e) {
       widget.onError(e.toString());
