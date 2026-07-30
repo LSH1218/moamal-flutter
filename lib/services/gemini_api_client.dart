@@ -67,7 +67,7 @@ class GeminiApiClient {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({'model': _model, ...geminiBody}),
-    );
+    ).timeout(const Duration(seconds: 10));
 
     if (resp.statusCode == 429) throw Exception('요청이 너무 많습니다. 잠시 후 다시 시도하세요.');
     if (resp.statusCode != 200) {
@@ -75,7 +75,17 @@ class GeminiApiClient {
     }
 
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
-    return json['text'] as String;
+    return _stripMarkdown(json['text'] as String);
+  }
+
+  String _stripMarkdown(String text) {
+    final s = text.trim();
+    if (s.startsWith('```')) {
+      final start = s.indexOf('\n') + 1;
+      final end = s.lastIndexOf('```');
+      if (start > 0 && end > start) return s.substring(start, end).trim();
+    }
+    return s;
   }
 
   // ── Body builders ────────────────────────────────────────────────────────
