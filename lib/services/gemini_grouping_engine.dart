@@ -17,6 +17,8 @@ class GeminiGroupingEngine {
   late final IdeaChunkBuffer _buffer;
   List<Group>? _cachedGroups;
   final _processedIds = <String>{};
+  String sessionTitle = '';
+  bool _frozen = false;
 
   GeminiGroupingEngine({required this.onUpdate}) {
     _buffer = IdeaChunkBuffer(
@@ -29,10 +31,17 @@ class GeminiGroupingEngine {
   // ── Public API ───────────────────────────────────────────────────────────
 
   List<Group> makeGroups(List<Idea> ideas) {
-    for (final idea in ideas) {
-      if (!_processedIds.contains(idea.id)) _buffer.add(idea);
+    if (!_frozen) {
+      for (final idea in ideas) {
+        if (!_processedIds.contains(idea.id)) _buffer.add(idea);
+      }
     }
     return _cachedGroups ?? _fallback.makeGroups(ideas);
+  }
+
+  void freeze() {
+    _frozen = true;
+    _buffer.clear();
   }
 
   String makeGroupTitle(Group group) =>
@@ -48,6 +57,7 @@ class GeminiGroupingEngine {
     _buffer.clear();
     _cachedGroups = null;
     _processedIds.clear();
+    _frozen = false;
   }
 
   // ── Internal ─────────────────────────────────────────────────────────────
@@ -55,7 +65,7 @@ class GeminiGroupingEngine {
   Future<void> _callGemini(List<Idea> batch) async {
     final snapshot = List<Group>.from(_cachedGroups ?? []);
     try {
-      final result = await _api.groupIdeas(snapshot, batch);
+      final result = await _api.groupIdeas(snapshot, batch, sessionTitle: sessionTitle);
       _applyResult(result, batch, snapshot);
     } catch (_) {
       // 폴백 유지 — 처리된 것으로 표시해 재큐 방지
@@ -117,7 +127,8 @@ class GeminiGroupingEngine {
         best = p;
       }
     }
-    if (best != null && bestOverlap > 0) return best.id;
+    final minOverlap = (ideas.length / 2).ceil().clamp(2, ideas.length);
+    if (best != null && bestOverlap >= minOverlap) return best.id;
     if (proposed.trim().isNotEmpty) return proposed;
     return ideas.first.id;
   }

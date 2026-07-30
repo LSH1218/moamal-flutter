@@ -18,8 +18,9 @@ class GeminiApiClient {
   // ── 의견 클러스터링 ──────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> groupIdeas(
-      List<Group> existing, List<Idea> newIdeas) async {
-    final body = _buildGroupBody(existing, newIdeas);
+      List<Group> existing, List<Idea> newIdeas,
+      {String sessionTitle = ''}) async {
+    final body = _buildGroupBody(existing, newIdeas, sessionTitle: sessionTitle);
     final text = await _call(body);
     return jsonDecode(text) as Map<String, dynamic>;
   }
@@ -80,8 +81,12 @@ class GeminiApiClient {
   // ── Body builders ────────────────────────────────────────────────────────
 
   Map<String, dynamic> _buildGroupBody(
-      List<Group> existing, List<Idea> newIdeas) {
+      List<Group> existing, List<Idea> newIdeas,
+      {String sessionTitle = ''}) {
     final sb = StringBuffer();
+    if (sessionTitle.isNotEmpty) {
+      sb.writeln('수업 주제: $sessionTitle\n');
+    }
     if (existing.isNotEmpty) {
       final grps = existing.map((g) => {
             'id': g.id,
@@ -111,7 +116,7 @@ class GeminiApiClient {
       'generationConfig': {
         'responseMimeType': 'application/json',
         'temperature': 0.1,
-        'maxOutputTokens': 512,
+        'maxOutputTokens': 1024,
       },
     };
   }
@@ -196,7 +201,7 @@ class GeminiApiClient {
       'generationConfig': {
         'responseMimeType': 'application/json',
         'temperature': 0.2,
-        'maxOutputTokens': 512,
+        'maxOutputTokens': 1024,
       },
     };
   }

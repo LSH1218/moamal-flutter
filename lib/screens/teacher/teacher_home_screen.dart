@@ -74,6 +74,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 
     _repo.listenToSession(newSession.sessionCode).listen((state) {
       if (!mounted) return;
+      _groupingEngine.sessionTitle = state.title;
       setState(() {
         _session = state;
         _groups = _groupingEngine.makeGroups(state.ideas);
@@ -139,6 +140,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     await _repo.publishSession(newSession);
     _repo.listenToSession(newSession.sessionCode).listen((state) {
       if (!mounted) return;
+      _groupingEngine.sessionTitle = state.title;
       setState(() {
         _session = state;
         _groups = _groupingEngine.makeGroups(state.ideas);

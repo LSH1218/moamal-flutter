@@ -53,6 +53,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
               ))
           .toList();
       await widget.repo.approveGroups(widget.sessionCode, toSave);
+      widget.groupingEngine.freeze();
       if (mounted) setState(() => _approved = true);
     } catch (e) {
       if (mounted) {

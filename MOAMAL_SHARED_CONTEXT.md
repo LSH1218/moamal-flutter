@@ -5,8 +5,8 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-07-30
-- 갱신한 역할: STT (2계층 동적 Whisper prompt 구현)
-- 기준 Flutter 커밋: `8779141` (feat(stt): 2계층 동적 Whisper prompt 생성)
+- 갱신한 역할: AI 의견구조화 (그룹화 품질 개선 4건)
+- 기준 Flutter 커밋: `8779141` (feat(stt): 2계층 동적 Whisper prompt 생성) — AI 변경은 커밋 전
 
 ## 1. 경영 요약
 
@@ -104,6 +104,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-07-30 | AI 의견구조화 | 그룹화 품질 개선 4건 (아래 §13 참조) |
 | 2026-07-30 | STT | 2계층 동적 Whisper prompt 구현 (아래 §12 참조) |
 | 2026-07-30 | AI/백엔드 | transcribeAudio Functions에 req.query.prompt 처리 추가 및 재배포 완료 |
 | 2026-07-29 | STT | Flutter STT MVP 6단계 구현 (아래 §11 참조) |
@@ -218,3 +219,33 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 - 승인 후 투표 중인 revision의 `groupId`는 바꾸지 않는다.
 - AI 재그룹화 초안과 승인본을 분리한다 (초안은 로컬 메모리, 승인본은 Firestore).
 - 학생 투표 문서(`votes/{participantId}.groupId`)는 승인본의 `groupId`만 참조한다.
+
+---
+
+## 13. AI 의견구조화 품질 개선 (2026-07-30)
+
+### 변경 내용 4건
+
+| # | 파일 | 변경 내용 | 이유 |
+|---|---|---|---|
+| 1 | `gemini_api_client.dart` | `maxOutputTokens` 512 → 1024 (그룹화·리포트) | 의견 20개+ 에서 응답이 중간에 잘려 JSON 파싱 실패 방지 |
+| 2 | `gemini_grouping_engine.dart` | `_stableGroupId()` 임계값 `> 0` → `>= ceil(ideas.length/2).clamp(2, ideas.length)` | 1개만 겹쳐도 ID 재사용하던 버그 수정 — 투표 집계 오류 방지 |
+| 3 | `gemini_api_client.dart`, `gemini_grouping_engine.dart`, `teacher_home_screen.dart` | 그룹화 요청에 `sessionTitle` 추가 (`수업 주제: ...` 첫 줄) | AI가 주제 맥락 없이 그룹화하던 문제 해결 — 제목·분류 품질 향상 |
+| 4 | `gemini_grouping_engine.dart`, `cluster_vote_screen.dart` | `freeze()` 메서드 추가, 승인 성공 시 호출 | 승인 후 새 의견이 들어와도 그룹 재편 차단 — 투표 집계 안정성 보장 |
+
+### 현재 AI 그룹화 동작 (코드 기준, 실기기 미검증)
+
+- 의견 3개 이상 또는 2.5초 경과 시 Gemini 호출 (IdeaChunkBuffer)
+- 호출 전까지 Jaccard 폴백(임계값 0.34)으로 즉시 표시
+- 기존 그룹 + 새 배치를 incremental로 Gemini에 전달
+- 세션 주제가 그룹화 프롬프트 첫 줄에 포함됨
+- 교사 승인 시 엔진 freeze → 이후 새 의견은 그룹 변경 없이 무시
+- 실패 시 조용히 폴백 유지 (교사 화면에 실패 상태 미표시 — 추후 개선 필요)
+
+### 남은 AI 관련 위험
+
+| 위험 | 영향 | 상태 |
+|---|---|---|
+| Gemini 실패 시 교사 화면에 상태 미표시 | 낮음 | 계획/미구현 |
+| Jaccard 폴백 → Gemini 전환 시 그룹 목록 갑작스러운 재배열 | 낮음 | 계획/미구현 |
+| 브리핑 maxOutputTokens 256 — 긴 제목/그룹에서 절단 가능성 | 낮음 | 모니터링 |
