@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-07-29
-- 갱신한 역할: STT (Flutter STT MVP 6단계 구현)
-- 기준 Flutter 커밋: `95460d7` (feat: Firebase Cloud Functions 백엔드 추가 및 보안 강화)
+- 마지막 갱신일: 2026-07-30
+- 갱신한 역할: STT (2계층 동적 Whisper prompt 구현)
+- 기준 Flutter 커밋: `8779141` (feat(stt): 2계층 동적 Whisper prompt 생성)
 
 ## 1. 경영 요약
 
@@ -93,8 +93,8 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: `flutter analyze` 통과 확인 → Android 실기기 STT 엔드투엔드 테스트 → VAD 임계값 튜닝 → iOS 권한 plist 확인
-- **AI/백엔드**: `transcribeAudio` Functions에 `req.query.language` / `req.query.prompt` 파라미터 처리 추가 후 재배포
+- **STT**: Android 실기기 STT 엔드투엔드 테스트 → VAD 임계값 튜닝 → iOS 권한 plist 확인
+- **AI/백엔드**: (완료) `transcribeAudio` Functions prompt 파라미터 처리 및 재배포 완료
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
 - **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
 - **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
@@ -104,6 +104,8 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-07-30 | STT | 2계층 동적 Whisper prompt 구현 (아래 §12 참조) |
+| 2026-07-30 | AI/백엔드 | transcribeAudio Functions에 req.query.prompt 처리 추가 및 재배포 완료 |
 | 2026-07-29 | STT | Flutter STT MVP 6단계 구현 (아래 §11 참조) |
 | 2026-07-25 | AI/백엔드 | Cloud Functions 4개 배포(transcribeAudio, geminiProxy, kakaoVerify, naverVerify), Firestore 보안 규칙 배포, Secret Manager 설정 완료 |
 | 2026-07-22 | Flutter UI/UX | 전체 UI 반응형 리팩토링 (compact/medium 2단계, responsive.dart 신규) |
@@ -145,15 +147,57 @@ sessions/{sessionCode}/participants/{uid}
              false = 학생이 처리 완료(acknowledge)
 ```
 
-### 프록시 측 추가 작업 필요
+### 프록시 측 추가 작업 — 완료 (2026-07-30)
 
-`transcribeAudio` Functions 코드에서 `req.query.language`와 `req.query.prompt`를 읽어 Whisper API 호출 시 전달해야 한다. 현재 미반영.
+`transcribeAudio` Functions에 `req.query.prompt`를 읽어 Whisper API FormData에 추가하는 코드 반영 및 재배포 완료.
 
 ### STT VAD 튜닝 파라미터 위치
 
 `student_session_screen.dart`
 - `_silenceThresholdDb = -40.0` — 교실 소음이 크면 -30 ~ -35로 조정
 - `_silenceSec = 3` — 학생 발화 간격 보고 조정
+
+---
+
+## 12. STT 2계층 동적 Whisper Prompt (2026-07-30)
+
+### 설계 결정
+
+교사 추가 입력 없이 세션 제목에서 수업 유형(Layer 1)과 수업 주제(Layer 2)를 자동 추출해 Whisper prompt를 동적으로 조합한다.
+
+- **Layer 1 (수업 유형)**: 제목 키워드 감지 → 발화 스타일 힌트
+- **Layer 2 (수업 주제)**: 제목 원문을 prompt에 직접 삽입 → 어휘 도메인 힌트
+
+### 유형 감지 규칙 (`buildWhisperPrompt` in `whisper_stt_client.dart`)
+
+| 제목 키워드 | context 문장 |
+|---|---|
+| 토론 / 토의 | 찬성, 반대, 주장, 근거, 반론 등 |
+| 발표 / 조사 | 조사, 발표, 자료, 첫째, 결론 등 |
+| 회의 | 안건, 동의, 표결 등 |
+| 심포지엄 | 연구, 발표, 질문, 답변 등 |
+| (없음) | 초·중등 수업 현장의 학생 발화 음성 |
+
+최종 prompt 예시 (`"한국의 전통음식 조사 발표"` 제목):
+```
+학생들의 주제 발표 및 조사 내용 공유 음성입니다. 조사, 발표, 자료, 첫째, 결론 등의 단어가 사용됩니다. 수업 주제: "한국의 전통음식 조사 발표"
+```
+
+### 적용 범위
+
+| 파일 | 변경 내용 |
+|---|---|
+| `whisper_stt_client.dart` | `buildWhisperPrompt(String sessionTitle)` 추가. `stopAndTranscribe(String prompt)` 파라미터화 |
+| `student_session_screen.dart` | `_sessionTitle` 캐싱 후 STT 호출 시 `buildWhisperPrompt(_sessionTitle)` 전달 |
+| `mic_button.dart` | `prompt` 파라미터 추가 (기본값 `''`) |
+| `student_tab.dart` | `MicButton`에 `buildWhisperPrompt(session.title)` 전달 |
+| `teacher_home_screen.dart` | `buildWhisperPrompt(_session.title)` 전달 |
+| `functions/index.js` | `req.query.prompt` 읽어 Whisper FormData에 추가 (500자 제한) |
+
+### 미검증
+
+- 실제 교실에서 유형 감지 키워드가 제목에 포함되지 않는 경우 fallback 동작 확인 필요
+- prompt 길이 500자 제한이 긴 제목에서 잘리는지 실측 필요
 
 ---
 
