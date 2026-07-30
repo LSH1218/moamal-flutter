@@ -57,6 +57,8 @@ exports.transcribeAudio = onRequest(
         const form = new FormData();
         form.append("model", "gpt-4o-mini-transcribe");
         form.append("language", "ko");
+        const whisperPrompt = typeof request.query.prompt === "string" ? request.query.prompt.slice(0, 500) : "";
+        if (whisperPrompt) form.append("prompt", whisperPrompt);
         form.append("file", new Blob([audio], {type: contentType}), "stt.m4a");
 
         const upstream = await fetch("https://api.openai.com/v1/audio/transcriptions", {
