@@ -45,6 +45,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   final _sttClient = WhisperSttClient();
   String? _latestTranscript;
   _MicStatus _micStatus = _MicStatus.idle;
+  bool _isToggleMode = false;
 
   @override
   void initState() {
@@ -194,6 +195,32 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     if (_micStatus == _MicStatus.recording) {
       await _sttClient.cancel();
       if (mounted) setState(() => _micStatus = _MicStatus.idle);
+    }
+  }
+
+  Future<void> _onMicTap() async {
+    if (_micStatus == _MicStatus.idle) {
+      _isToggleMode = true;
+      await _startRecording();
+    } else if (_micStatus == _MicStatus.recording && _isToggleMode) {
+      await _stopAndTranscribe();
+    }
+  }
+
+  Future<void> _onMicLongPressStart() async {
+    if (_micStatus != _MicStatus.idle) return;
+    _isToggleMode = false;
+    await _startRecording();
+  }
+
+  Future<void> _onMicLongPressEnd() async {
+    if (_micStatus != _MicStatus.recording || _isToggleMode) return;
+    await _stopAndTranscribe();
+  }
+
+  Future<void> _onMicLongPressCancel() async {
+    if (_micStatus == _MicStatus.recording && !_isToggleMode) {
+      await _cancelRecording();
     }
   }
 
@@ -454,9 +481,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     };
 
     return GestureDetector(
-      onLongPressStart: (_) => _startRecording(),
-      onLongPressEnd: (_) => _stopAndTranscribe(),
-      onLongPressCancel: () => _cancelRecording(),
+      onTap: _micStatus == _MicStatus.transcribing ? null : _onMicTap,
+      onLongPressStart: _micStatus == _MicStatus.transcribing ? null : (_) => _onMicLongPressStart(),
+      onLongPressEnd: _micStatus == _MicStatus.transcribing ? null : (_) => _onMicLongPressEnd(),
+      onLongPressCancel: _micStatus == _MicStatus.transcribing ? null : _onMicLongPressCancel,
       child: Container(
         width: 64,
         height: 64,
