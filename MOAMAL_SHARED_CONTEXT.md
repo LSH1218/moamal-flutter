@@ -5,8 +5,8 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-07-30
-- 갱신한 역할: AI 의견구조화 (그룹화 품질 개선 6건)
-- 기준 Flutter 커밋: `81efb0e` (fix(ai): Gemini 호출 타임아웃 추가 및 마크다운 래퍼 제거)
+- 갱신한 역할: STT (교사 마이크 Toggle+PTT 하이브리드 적용)
+- 기준 Flutter 커밋: `82a2c49` (feat(stt): 교사 마이크에 Toggle+PTT 하이브리드 적용)
 
 ## 1. 경영 요약
 
@@ -104,6 +104,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-07-30 | STT | 교사 마이크 Toggle+PTT 하이브리드 적용 (teacher_home_screen.dart) |
 | 2026-07-30 | AI 의견구조화 | Gemini 타임아웃(10초) + 마크다운 래퍼 제거 (§13 참조) |
 | 2026-07-30 | AI 의견구조화 | 그룹화 품질 개선 4건 (§13 참조) |
 | 2026-07-30 | STT | 2계층 동적 Whisper prompt 구현 (아래 §12 참조) |
@@ -129,7 +130,7 @@
 |------|------|------|
 | 1. STT 호출 완성 | `whisper_stt_client.dart` | `language: 'ko'` + `prompt`(수업 키워드 10개) 쿼리 파라미터 추가. 재시도: 최대 3회, 지수 백오프(1→2초). 5xx·네트워크 오류만 재시도, 4xx 즉시 실패. 30초 타임아웃. 파일은 재시도 전 과정 후 단 1회 삭제. |
 | 2. 편집 초안 화면 | `widgets/draft_sheet.dart`, `student_session_screen.dart` | STT 완료 후 바로 제출 대신 바텀시트 표시. 학생이 텍스트 수정 후 [제출] or [다시 녹음] 선택. `_lastTranscript`는 초안이 아닌 실제 제출 텍스트로 갱신. |
-| 3. Toggle + PTT 하이브리드 | `student_session_screen.dart` | `_onTap`: idle→토글 시작, 토글 녹음 중→종료. `_onLongPressStart`: idle→PTT 시작. `_onLongPressEnd`: PTT 모드일 때만 종료. `_SpeakCard` 힌트: 상태·모드별 3종. |
+| 3. Toggle + PTT 하이브리드 | `student_session_screen.dart`, `teacher_home_screen.dart` | 탭=토글, 길게 누르기=PTT. 학생·교사 동일 적용. `_isToggleMode` 플래그로 모드 분기. `_SpeakCard` 힌트: 상태·모드별 3종. |
 | 4. VAD Silence Auto-Pause | `whisper_stt_client.dart`, `student_session_screen.dart` | `amplitudeStream`(200ms 간격, dBFS) 노출. 토글 모드 전용. -40 dBFS 미만 3초 지속 시 자동 종료. PTT 모드는 VAD 미적용. |
 | 5. Teacher 마이크 강제 중지 | `moamal_repository.dart`, `firebase_moamal_repository.dart`, `student_session_screen.dart`, `student_tab.dart` | Firestore `participants/{uid}/forceStop: bool`. 교사 화면: "학생 마이크 제어" 패널 + [중지] 버튼. 학생 앱: 실시간 리스너 → VAD 중단 → 녹음 취소 → 스낵바 → `clearForceStop`. |
 | 6. 편집 초안 화면 (학생용) | 위 2단계와 동일 | —  |
