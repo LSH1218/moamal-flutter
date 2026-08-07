@@ -16,6 +16,10 @@ abstract class MoamalRepository {
   void stopListening();
 
   // ── Teacher mic control ────────────────────────────────────────────────
+  Future<void> forceStartMic(String sessionCode, String uid);
+  Future<void> clearForceStart(String sessionCode, String uid);
+  Stream<bool> listenToForceStart(String sessionCode, String uid);
+
   Future<void> forceStopMic(String sessionCode, String uid);
   Future<void> clearForceStop(String sessionCode, String uid);
   Stream<bool> listenToForceStop(String sessionCode, String uid);

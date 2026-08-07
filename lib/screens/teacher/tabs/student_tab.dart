@@ -152,6 +152,8 @@ class _StudentTabState extends State<StudentTab> {
                   children: widget.session.participants
                       .map((p) => _ParticipantRow(
                             participant: p,
+                            onForceStart: () => widget.repo.forceStartMic(
+                                widget.session.sessionCode, p.uid),
                             onForceStop: () => widget.repo.forceStopMic(
                                 widget.session.sessionCode, p.uid),
                           ))
@@ -188,10 +190,12 @@ class _StudentTabState extends State<StudentTab> {
 
 class _ParticipantRow extends StatelessWidget {
   final Participant participant;
+  final VoidCallback onForceStart;
   final VoidCallback onForceStop;
 
   const _ParticipantRow({
     required this.participant,
+    required this.onForceStart,
     required this.onForceStop,
   });
 
@@ -207,6 +211,18 @@ class _ParticipantRow extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: kInk),
             ),
           ),
+          OutlinedButton(
+            onPressed: onForceStart,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kGreen,
+              side: const BorderSide(color: kGreen),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('시작', style: TextStyle(fontSize: 13)),
+          ),
+          const SizedBox(width: 6),
           OutlinedButton(
             onPressed: onForceStop,
             style: OutlinedButton.styleFrom(

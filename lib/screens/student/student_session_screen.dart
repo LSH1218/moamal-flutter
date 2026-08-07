@@ -34,7 +34,8 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
   StreamSubscription<double>? _amplitudeSub;
   DateTime? _lastSpeechTime;
 
-  // Teacher force stop
+  // Teacher force control
+  StreamSubscription<bool>? _forceStartSub;
   StreamSubscription<bool>? _forceStopSub;
   // dBFS 기준: -40 이하를 침묵으로 판단. 교실 소음 환경에 따라 조정 필요.
   static const double _silenceThresholdDb = -40.0;
@@ -45,7 +46,31 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
     super.initState();
     _repo = context.read<FirebaseMoamalRepository>();
     _auth = context.read<AuthService>();
+    _listenForceStart();
     _listenForceStop();
+  }
+
+  void _listenForceStart() {
+    final uid = _auth.currentUid;
+    if (uid == null) return;
+    _forceStartSub = _repo
+        .listenToForceStart(widget.sessionCode, uid)
+        .listen((forceStart) {
+      if (forceStart && mounted) _handleForceStart(uid);
+    });
+  }
+
+  Future<void> _handleForceStart(String uid) async {
+    await _repo.clearForceStart(widget.sessionCode, uid);
+    if (_micStatus != _MicStatus.idle) return;
+    _isToggleMode = true;
+    await _startRecording();
+    if (_micStatus == _MicStatus.recording) _startVAD();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('선생님이 녹음을 시작했어요.')),
+      );
+    }
   }
 
   void _listenForceStop() {
@@ -75,6 +100,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
   @override
   void dispose() {
     _stopVAD();
+    _forceStartSub?.cancel();
     _forceStopSub?.cancel();
     _repo.stopListening();
     _sttClient.dispose();

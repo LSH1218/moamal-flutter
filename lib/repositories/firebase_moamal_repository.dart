@@ -181,6 +181,31 @@ class FirebaseMoamalRepository implements MoamalRepository {
   // ── Teacher mic control ────────────────────────────────────────────────────
 
   @override
+  Future<void> forceStartMic(String sessionCode, String uid) async {
+    await _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .set({'forceStart': true}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> clearForceStart(String sessionCode, String uid) async {
+    await _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .set({'forceStart': false}, SetOptions(merge: true));
+  }
+
+  @override
+  Stream<bool> listenToForceStart(String sessionCode, String uid) {
+    return _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .snapshots()
+        .map((snap) => snap.data()?['forceStart'] as bool? ?? false);
+  }
+
+  @override
   Future<void> forceStopMic(String sessionCode, String uid) async {
     await _sessionRef(sessionCode)
         .collection('participants')
