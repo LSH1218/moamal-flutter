@@ -55,7 +55,7 @@ exports.transcribeAudio = onRequest(
         await enforceRateLimit(uid);
 
         const form = new FormData();
-        form.append("model", "gpt-4o-mini-transcribe");
+        form.append("model", "whisper-1");
         form.append("language", "ko");
         const whisperPrompt = typeof request.query.prompt === "string" ? request.query.prompt.slice(0, 500) : "";
         if (whisperPrompt) form.append("prompt", whisperPrompt);
