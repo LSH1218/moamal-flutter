@@ -69,7 +69,7 @@
 - **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
-- **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, Node.js 20→22 업그레이드(2026-10-30 이전 필수), 개발/운영 환경 분리
+- **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리
 
 ## 6. 주요 위험
 
@@ -79,7 +79,7 @@
 | ~~Flutter 학생 투표가 `idea.id`에 저장됨~~ | ~~높음~~ | **해결됨 2026-07-17** | 완료 |
 | ~~교사 승인 단계 없음~~ | ~~높음~~ | **해결됨 2026-07-17** | 완료 |
 | 카카오/네이버 Flutter SDK 미연동 | 중간 | Functions 준비 완료, Flutter 앱 대화방 작업 필요 | Flutter 앱 대화방에서 SDK 연동 |
-| Node.js 20 지원 종료 | 중간 | 2026-10-30 이후 배포 불가 | `functions/package.json` engines.node → 22 |
+| ~~Node.js 20 지원 종료~~ | ~~중간~~ | **해결됨 2026-08-07** — Node.js 22 업그레이드 완료 | 완료 |
 | 슈퍼바이저 모드 노출 | 중간 | 랜딩 로고 3탭 → PIN 1218 | 출시 전 제거 또는 숨김 처리 |
 | 학생이 다른 의견을 수정 가능 | 높음 | `ideas`의 `create, update`가 모든 인증 사용자에게 허용 | 작성자 UID 검증 추가 필요 |
 
@@ -94,10 +94,10 @@
 ## 8. 대화방별 다음 행동
 
 - **STT**: 502 에러 해결 후 Android 실기기 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
-- **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
+- **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
 - **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
-- **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
+- **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **STT**: Android 실기기에서 whisper-1로 STT 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정
 
@@ -105,6 +105,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-07 | AI/백엔드 | Node.js 20 → 22 업그레이드 (`firebase.json`, `functions/package.json`) 및 재배포 완료 |
 | 2026-08-07 | AI/백엔드 | Firestore 보안 규칙 수정: `participants` update에 `isOwner` 조건 추가 (교사가 `forceStop` 필드 쓰기 가능하도록) → 웹 콘솔 배포 완료 |
 | 2026-08-07 | AI/백엔드 | `transcribeAudio` STT 모델 `gpt-4o-mini-transcribe` → `whisper-1` 교체 후 재배포 완료 (401 에러 해결 목적) |
 | 2026-08-07 | STT | Android 실기기 502 에러 원인 분석: 구 OPENAI_API_KEY(Last used: Never, Restricted 권한) 발견 → All 권한 새 키 발급 → Secret Manager version 3 재등록 → Functions 재배포. 여전히 502 발생 → `gpt-4o-mini-transcribe` 모델 티어 미지원 의심, `whisper-1` 교체를 백엔드 대화방에 이관 |
