@@ -269,7 +269,7 @@ multiDexEnabled = true
 
 ## 남은 작업
 
-- [ ] Node.js 20 → 22 업그레이드 (`functions/package.json` engines.node 변경) — 2026-10-30 이전 필수
+- [x] Node.js 22 업그레이드 완료 (2026-08-07)
 - [ ] firebase-functions 최신 버전 업그레이드 (`npm install --save firebase-functions@latest`)
 - [ ] Firebase 개발/운영 환경 분리
 - [ ] Google Sign-In SHA-1 키 Firebase Console 등록 (실제 기기 로그인 테스트 전 필요)
