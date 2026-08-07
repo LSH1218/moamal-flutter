@@ -5,7 +5,7 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-07
-- 갱신한 역할: STT (교사 학생 마이크 원격 시작 기능 추가)
+- 갱신한 역할: AI/백엔드 (whisper-1 교체 배포, Firestore 보안 규칙 수정)
 - 기준 Flutter 커밋: `76496aa` (feat(stt): 교사 학생 마이크 원격 시작(forceStart) 기능 추가)
 
 ## 1. 경영 요약
@@ -61,11 +61,11 @@
 ## 5. 배포·운영 현황 (2026-07-25 기준)
 
 - **Cloud Functions**: 4개 함수 배포 완료 (asia-northeast3)
-  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit
+  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `whisper-1`** (2026-08-07 `gpt-4o-mini-transcribe`에서 교체)
   - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit
   - `kakaoVerify`: 카카오 Custom Token 발급
   - `naverVerify`: 네이버 Custom Token 발급
-- **Secret Manager**: OPENAI_API_KEY, GEMINI_API_KEY 등록 완료
+- **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
 - **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
@@ -93,17 +93,21 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: Android 실기기 STT 엔드투엔드 테스트 → VAD 임계값 튜닝 → iOS 권한 plist 확인
-- **AI/백엔드**: (완료) `transcribeAudio` Functions prompt 파라미터 처리 및 재배포 완료
+- **STT**: 502 에러 해결 후 Android 실기기 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
+- **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
 - **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
 - **AI/백엔드**: Node.js 22 업그레이드, App Check 적용, 개발/운영 환경 분리
+- **STT**: Android 실기기에서 whisper-1로 STT 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정
 
 ## 9. 최근 변경 기록
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-07 | AI/백엔드 | Firestore 보안 규칙 수정: `participants` update에 `isOwner` 조건 추가 (교사가 `forceStop` 필드 쓰기 가능하도록) → 웹 콘솔 배포 완료 |
+| 2026-08-07 | AI/백엔드 | `transcribeAudio` STT 모델 `gpt-4o-mini-transcribe` → `whisper-1` 교체 후 재배포 완료 (401 에러 해결 목적) |
+| 2026-08-07 | STT | Android 실기기 502 에러 원인 분석: 구 OPENAI_API_KEY(Last used: Never, Restricted 권한) 발견 → All 권한 새 키 발급 → Secret Manager version 3 재등록 → Functions 재배포. 여전히 502 발생 → `gpt-4o-mini-transcribe` 모델 티어 미지원 의심, `whisper-1` 교체를 백엔드 대화방에 이관 |
 | 2026-08-07 | STT | 교사 학생 마이크 원격 시작(forceStart) 기능 추가 (§11 5단계 확장) |
 | 2026-07-30 | STT | 교사 마이크 Toggle+PTT 하이브리드 적용 (teacher_home_screen.dart) |
 | 2026-07-30 | AI 의견구조화 | Gemini 타임아웃(10초) + 마크다운 래퍼 제거 (§13 참조) |
@@ -138,7 +142,7 @@
 
 ### 미검증 플랫폼
 
-- Android 실기기 빌드 및 STT 호출 엔드투엔드 (Functions 미배포 상태)
+- Android 실기기 STT 엔드투엔드: Functions 배포 완료, `whisper-1`로 교체 완료 → **실기기 재검증 필요**
 - iOS (record 패키지 AVAudioSession 권한 설정, `NSSpeechRecognitionUsageDescription` plist 미확인)
 - VAD 침묵 임계값(-40 dBFS, 3초): 실제 교실 소음에서 튜닝 필요
 
