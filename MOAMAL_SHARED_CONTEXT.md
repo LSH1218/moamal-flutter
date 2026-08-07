@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-07-30
-- 갱신한 역할: STT (교사 마이크 Toggle+PTT 하이브리드 적용)
-- 기준 Flutter 커밋: `82a2c49` (feat(stt): 교사 마이크에 Toggle+PTT 하이브리드 적용)
+- 마지막 갱신일: 2026-08-07
+- 갱신한 역할: STT (교사 학생 마이크 원격 시작 기능 추가)
+- 기준 Flutter 커밋: `76496aa` (feat(stt): 교사 학생 마이크 원격 시작(forceStart) 기능 추가)
 
 ## 1. 경영 요약
 
@@ -104,6 +104,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-07 | STT | 교사 학생 마이크 원격 시작(forceStart) 기능 추가 (§11 5단계 확장) |
 | 2026-07-30 | STT | 교사 마이크 Toggle+PTT 하이브리드 적용 (teacher_home_screen.dart) |
 | 2026-07-30 | AI 의견구조화 | Gemini 타임아웃(10초) + 마크다운 래퍼 제거 (§13 참조) |
 | 2026-07-30 | AI 의견구조화 | 그룹화 품질 개선 4건 (§13 참조) |
@@ -132,7 +133,7 @@
 | 2. 편집 초안 화면 | `widgets/draft_sheet.dart`, `student_session_screen.dart` | STT 완료 후 바로 제출 대신 바텀시트 표시. 학생이 텍스트 수정 후 [제출] or [다시 녹음] 선택. `_lastTranscript`는 초안이 아닌 실제 제출 텍스트로 갱신. |
 | 3. Toggle + PTT 하이브리드 | `student_session_screen.dart`, `teacher_home_screen.dart` | 탭=토글, 길게 누르기=PTT. 학생·교사 동일 적용. `_isToggleMode` 플래그로 모드 분기. `_SpeakCard` 힌트: 상태·모드별 3종. |
 | 4. VAD Silence Auto-Pause | `whisper_stt_client.dart`, `student_session_screen.dart` | `amplitudeStream`(200ms 간격, dBFS) 노출. 토글 모드 전용. -40 dBFS 미만 3초 지속 시 자동 종료. PTT 모드는 VAD 미적용. |
-| 5. Teacher 마이크 강제 중지 | `moamal_repository.dart`, `firebase_moamal_repository.dart`, `student_session_screen.dart`, `student_tab.dart` | Firestore `participants/{uid}/forceStop: bool`. 교사 화면: "학생 마이크 제어" 패널 + [중지] 버튼. 학생 앱: 실시간 리스너 → VAD 중단 → 녹음 취소 → 스낵바 → `clearForceStop`. |
+| 5. Teacher 마이크 강제 제어 | `moamal_repository.dart`, `firebase_moamal_repository.dart`, `student_session_screen.dart`, `student_tab.dart` | Firestore `participants/{uid}/forceStop: bool`, `forceStart: bool`. 교사 화면: "학생 마이크 제어" 패널 + [시작] [중지] 버튼. 학생 앱: forceStart → Toggle 모드 자동 녹음 시작 + VAD. forceStop → VAD 중단 → 녹음 취소 → 스낵바. 각 처리 후 플래그 초기화. |
 | 6. 편집 초안 화면 (학생용) | 위 2단계와 동일 | —  |
 
 ### 미검증 플랫폼
@@ -145,7 +146,8 @@
 
 ```
 sessions/{sessionCode}/participants/{uid}
-  forceStop: bool   ← 기존 없음, 신규 추가
+  forceStart: bool  ← 신규 추가 (2026-08-07)
+  forceStop: bool   ← 신규 추가 (2026-07-29)
              true  = 교사가 강제 중지 요청
              false = 학생이 처리 완료(acknowledge)
 ```
