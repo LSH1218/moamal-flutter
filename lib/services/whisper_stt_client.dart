@@ -8,7 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 const _defaultEndpoint =
-    'https://asia-northeast3-moamal-1e601.cloudfunctions.net/transcribeAudio';
+    'https://transcribeaudio-xzj4mtcbda-du.a.run.app';
 const _endpoint = String.fromEnvironment(
   'STT_PROXY_URL',
   defaultValue: _defaultEndpoint,

@@ -5,7 +5,7 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-07
-- 갱신한 역할: AI/백엔드 (whisper-1 교체 배포, Firestore 보안 규칙 수정)
+- 갱신한 역할: STT (Android 실기기 STT 엔드투엔드 검증 완료)
 - 기준 Flutter 커밋: `76496aa` (feat(stt): 교사 학생 마이크 원격 시작(forceStart) 기능 추가)
 
 ## 1. 경영 요약
@@ -44,7 +44,7 @@
 
 1. 교사가 세션을 만든다. — Flutter 구현 완료
 2. 학생이 QR/코드로 참여한다. — Flutter 코드 참여 구현, QR 생성 UI 확인
-3. 학생이 의견을 제출한다. — Flutter STT 제출 구현 (Cloud Functions 프록시)
+3. 학생이 의견을 제출한다. — **Flutter STT 제출 구현 완료 + Android 실기기 검증 완료** (Cloud Functions whisper-1 프록시)
 4. AI가 유사 의견을 그룹화한다. — Flutter 클라이언트 로컬 상태로 부분 구현
 5. 교사가 결과를 수정·승인한다. — **구현 완료**: ClusterVoteScreen에 "그룹 승인" 버튼, `approveGroups()` → Firestore 배치 저장
 6. 참여자가 그룹 단위로 투표한다. — **구현 완료**: 학생 화면이 `approvedGroups`를 구독해 `groupId`로 투표
@@ -93,18 +93,18 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: 502 에러 해결 후 Android 실기기 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
+- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 → iOS 권한 plist 확인
+- **Flutter UI/UX**: 실시간 음성 텍스트 박스 BOTTOM OVERFLOWED 22px 레이아웃 수정
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
 - **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
-- **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
-- **STT**: Android 실기기에서 whisper-1로 STT 엔드투엔드 재검증 → VAD 임계값 튜닝 → iOS 권한 plist 확인
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정
 
 ## 9. 최근 변경 기록
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-07 | STT | Android 실기기 STT 엔드투엔드 검증 완료. 전사 샘플: "다들 학급회의 시작할 건데 급식 문제에 대해서 의견 좀 말해보자." 정확 인식. OpenAI 크레딧 미충전이 429 원인이었음 → 충전 후 해결. 미해결: 실시간 음성 박스 BOTTOM OVERFLOWED 22px (Flutter UI/UX 대화방 이관) |
 | 2026-08-07 | AI/백엔드 | Node.js 20 → 22 업그레이드 (`firebase.json`, `functions/package.json`) 및 재배포 완료 |
 | 2026-08-07 | AI/백엔드 | Firestore 보안 규칙 수정: `participants` update에 `isOwner` 조건 추가 (교사가 `forceStop` 필드 쓰기 가능하도록) → 웹 콘솔 배포 완료 |
 | 2026-08-07 | AI/백엔드 | `transcribeAudio` STT 모델 `gpt-4o-mini-transcribe` → `whisper-1` 교체 후 재배포 완료 (401 에러 해결 목적) |
@@ -143,7 +143,7 @@
 
 ### 미검증 플랫폼
 
-- Android 실기기 STT 엔드투엔드: Functions 배포 완료, `whisper-1`로 교체 완료 → **실기기 재검증 필요**
+- ~~Android 실기기 STT 엔드투엔드~~ — **검증 완료 2026-08-07** (whisper-1, OpenAI 크레딧 충전 후 정상 동작)
 - iOS (record 패키지 AVAudioSession 권한 설정, `NSSpeechRecognitionUsageDescription` plist 미확인)
 - VAD 침묵 임계값(-40 dBFS, 3초): 실제 교실 소음에서 튜닝 필요
 

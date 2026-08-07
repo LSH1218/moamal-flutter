@@ -23,9 +23,7 @@ void main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  const kakaoKey = String.fromEnvironment('KAKAO_NATIVE_APP_KEY');
-
-  KakaoSdk.init(nativeAppKey: kakaoKey);
+  KakaoSdk.init(nativeAppKey: '287dec7ec232fe4d45c04f8b06a14bdb');
 
   await Firebase.initializeApp();
   await PromptConfig.init();

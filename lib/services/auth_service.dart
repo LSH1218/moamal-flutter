@@ -1,10 +1,23 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:flutter_naver_login/flutter_naver_login.dart';
 import 'package:flutter_naver_login/interface/types/naver_login_status.dart';
+
+enum TeacherAccessResult { approved, pending }
+
+const _allowedDomains = {
+  'korea.kr',
+  'sen.go.kr', 'ice.go.kr', 'pen.go.kr', 'dge.go.kr', 'gen.go.kr',
+  'dje.go.kr', 'wse.go.kr', 'sje.go.kr', 'goe.go.kr', 'gwe.go.kr',
+  'cbe.go.kr', 'cne.go.kr', 'jbe.go.kr', 'jne.go.kr', 'gbe.kr',
+  'gne.go.kr', 'jje.go.kr',
+};
+
+const _allowedSuffixes = ['.es.kr', '.ms.kr', '.hs.kr', '.sc.kr'];
 
 const _kakaoVerifyUrl =
     'https://asia-northeast3-moamal-1e601.cloudfunctions.net/kakaoVerify';
@@ -102,6 +115,36 @@ class AuthService {
 
     final credential = await _auth.signInWithCustomToken(customToken);
     return credential.user!.uid;
+  }
+
+  /// 교사 접근 권한 확인
+  /// 도메인 자동 승인 → 화이트리스트 확인 순서로 검사
+  Future<TeacherAccessResult> checkTeacherAccess() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('로그인 상태가 아닙니다');
+
+    final email = user.email?.toLowerCase();
+
+    if (email != null && email.contains('@')) {
+      final domain = email.split('@').last.toLowerCase();
+      if (_allowedDomains.contains(domain)) return TeacherAccessResult.approved;
+      if (RegExp(r'^.+\.(es|ms|hs|sc)\.kr$').hasMatch(domain)) {
+        return TeacherAccessResult.approved;
+      }
+    }
+
+    final db = FirebaseFirestore.instance;
+
+    if (email != null && email.isNotEmpty) {
+      final doc = await db.collection('whitelisted_teachers').doc(email).get();
+      if (doc.exists) return TeacherAccessResult.approved;
+    }
+
+    final uidDoc =
+        await db.collection('whitelisted_teachers').doc(user.uid).get();
+    if (uidDoc.exists) return TeacherAccessResult.approved;
+
+    return TeacherAccessResult.pending;
   }
 
   /// 학생: 익명 로그인

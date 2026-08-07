@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
+import 'pending_approval_screen.dart';
 import 'teacher_home_screen.dart';
 
 enum _Provider { google, kakao, naver }
@@ -33,14 +34,25 @@ class _SignInScreenState extends State<SignInScreen> {
           await auth.signInWithNaver();
       }
       if (!mounted) return;
-      final title = await _showTitleDialog();
+
+      final access = await auth.checkTeacherAccess();
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TeacherHomeScreen(initialTitle: title),
-        ),
-      );
+
+      if (access == TeacherAccessResult.approved) {
+        final title = await _showTitleDialog();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherHomeScreen(initialTitle: title),
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -92,23 +104,30 @@ class _SignInScreenState extends State<SignInScreen> {
     return Scaffold(
       backgroundColor: kGround,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            // 태블릿에서 과도하게 넓어지지 않도록 제한
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              children: [
-                const Spacer(flex: 3),
-                const _LogoSection(),
-                const Spacer(flex: 4),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(28, 0, 28, 24 + bottomPad),
-                  child: _BottomSection(
-                    loading: _loading,
-                    onSignIn: _signIn,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 48),
+                      const _LogoSection(),
+                      const SizedBox(height: 64),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(28, 0, 28, 24 + bottomPad),
+                        child: _BottomSection(
+                          loading: _loading,
+                          onSignIn: _signIn,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
