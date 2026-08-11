@@ -178,6 +178,29 @@ class FirebaseMoamalRepository implements MoamalRepository {
     _controller = null;
   }
 
+  // ── Teacher notes ─────────────────────────────────────────────────────────
+
+  @override
+  Future<void> addTeacherNote({required String sessionCode, required String text}) async {
+    await _sessionRef(sessionCode).collection('teacher_notes').add({
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+      'type': 'instruction',
+    });
+  }
+
+  @override
+  Future<List<String>> getAllTeacherNotes(String sessionCode) async {
+    final snap = await _sessionRef(sessionCode)
+        .collection('teacher_notes')
+        .orderBy('createdAt')
+        .get();
+    return snap.docs
+        .map((d) => (d.data()['text'] as String?) ?? '')
+        .where((t) => t.isNotEmpty)
+        .toList();
+  }
+
   // ── Teacher mic control ────────────────────────────────────────────────────
 
   @override

@@ -15,6 +15,10 @@ abstract class MoamalRepository {
   Stream<SessionState> listenToSession(String sessionCode);
   void stopListening();
 
+  // ── Teacher notes ──────────────────────────────────────────────────────
+  Future<void> addTeacherNote({required String sessionCode, required String text});
+  Future<List<String>> getAllTeacherNotes(String sessionCode);
+
   // ── Teacher mic control ────────────────────────────────────────────────
   Future<void> forceStartMic(String sessionCode, String uid);
   Future<void> clearForceStart(String sessionCode, String uid);

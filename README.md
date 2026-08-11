@@ -142,7 +142,8 @@ joinedAt: Timestamp
 | ideas | 로그인 사용자 | 로그인 사용자 |
 | votes | 교사 또는 본인 | 본인만 |
 | approvedGroups | 로그인 사용자 | 교사만 |
-| participants | 교사 또는 본인 | 본인만 |
+| participants | 교사 또는 본인 | 본인 또는 교사 |
+| teacher_notes | 로그인 사용자 | 교사만 |
 | sttRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 | geminiRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 

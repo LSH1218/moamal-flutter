@@ -180,7 +180,18 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     setState(() => _micStatus = _MicStatus.transcribing);
     try {
       final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_session.title));
-      if (mounted) setState(() => _latestTranscript = text);
+      if (!mounted) return;
+      setState(() => _latestTranscript = text);
+      await _repo.addTeacherNote(sessionCode: _session.sessionCode, text: text);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('발문/지시 기록됨'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -383,10 +394,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               maxHeight: (MediaQuery.sizeOf(context).height * 0.22).clamp(100, 160),
             ),
             child: _SttBox(
-              transcript: _latestTranscript ??
-                  (_session.ideas.isNotEmpty
-                      ? _session.ideas.last.text
-                      : null),
+              transcript: _latestTranscript,
             ),
           ),
         ),
@@ -445,10 +453,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 20, 80, 0),
                         child: _SttBox(
-                          transcript: _latestTranscript ??
-                              (_session.ideas.isNotEmpty
-                                  ? _session.ideas.last.text
-                                  : null),
+                          transcript: _latestTranscript,
                           expand: true,
                         ),
                       ),

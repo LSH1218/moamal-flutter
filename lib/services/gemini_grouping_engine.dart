@@ -18,6 +18,7 @@ class GeminiGroupingEngine {
   List<Group>? _cachedGroups;
   final _processedIds = <String>{};
   String sessionTitle = '';
+  List<String> recentTeacherNotes = [];
   bool _frozen = false;
 
   GeminiGroupingEngine({required this.onUpdate}) {
@@ -58,6 +59,7 @@ class GeminiGroupingEngine {
     _cachedGroups = null;
     _processedIds.clear();
     _frozen = false;
+    recentTeacherNotes = [];
   }
 
   // ── Internal ─────────────────────────────────────────────────────────────
@@ -65,7 +67,8 @@ class GeminiGroupingEngine {
   Future<void> _callGemini(List<Idea> batch) async {
     final snapshot = List<Group>.from(_cachedGroups ?? []);
     try {
-      final result = await _api.groupIdeas(snapshot, batch, sessionTitle: sessionTitle);
+      final result = await _api.groupIdeas(snapshot, batch,
+          sessionTitle: sessionTitle, teacherNotes: recentTeacherNotes);
       _applyResult(result, batch, snapshot);
     } catch (_) {
       // 폴백 유지 — 처리된 것으로 표시해 재큐 방지
