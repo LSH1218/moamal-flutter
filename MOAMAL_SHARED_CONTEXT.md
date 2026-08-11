@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-07
-- 갱신한 역할: STT (iOS 마이크 권한 추가)
-- 기준 Flutter 커밋: `76496aa` (feat(stt): 교사 학생 마이크 원격 시작(forceStart) 기능 추가)
+- 마지막 갱신일: 2026-08-11
+- 갱신한 역할: AI 의견구조화 (교사 발문 컨텍스트 강화, 모델 업그레이드, 클라이언트 리팩토링)
+- 기준 Flutter 커밋: `45a647f` (feat(ai): 교사 발문 컨텍스트 강화 및 모델/클라이언트 리팩토링)
 
 ## 1. 경영 요약
 
@@ -104,6 +104,10 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-11 | AI 의견구조화 | `GeminiApiClient` → `AiApiClient` 이름 변경 (`gemini_api_client.dart` → `ai_api_client.dart`), 프로바이더 교체 대비 |
+| 2026-08-11 | AI 의견구조화 | Gemini 모델 `gemini-2.0-flash` → `gemini-2.5-flash` 업그레이드, `functions/index.js` allowedModels 추가 |
+| 2026-08-11 | AI 의견구조화 | 교사 발문 컨텍스트 강화: `groupIdeas()` + `generateReport()`에 `teacherNotes` 파라미터 추가, 그룹화 프롬프트에 최근 지시 1개 포함, 리포트에 지시 타임라인 섹션 추가 (§14 참조) |
+| 2026-08-11 | AI 의견구조화 | `getAllTeacherNotes()` 레포지터리 추가 — Firestore `teacher_notes` 전체 시간순 조회 |
 | 2026-08-07 | AI/백엔드 | Firestore 보안 규칙에 `teacher_notes` 하위 컬렉션 추가 (읽기: 인증 사용자, 쓰기: 교사만) → 배포 완료 |
 | 2026-08-07 | STT | iOS Info.plist에 `NSMicrophoneUsageDescription` 추가 — record 패키지 마이크 권한 필수 항목 (미추가 시 iOS에서 녹음 불가) |
 | 2026-08-07 | STT | Android 실기기 STT 엔드투엔드 검증 완료. 전사 샘플: "다들 학급회의 시작할 건데 급식 문제에 대해서 의견 좀 말해보자." 정확 인식. OpenAI 크레딧 미충전이 429 원인이었음 → 충전 후 해결. 미해결: 실시간 음성 박스 BOTTOM OVERFLOWED 22px (Flutter UI/UX 대화방 이관) |
@@ -262,3 +266,51 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | Gemini 실패 시 교사 화면에 상태 미표시 | 낮음 | 계획/미구현 — 폴백이 작동하므로 파일럿 후 대응 |
 | Jaccard 폴백 → Gemini 전환 시 그룹 목록 갑작스러운 재배열 | 낮음 | 미관 문제, 후순위 |
 | 브리핑 maxOutputTokens 256 — 긴 제목/그룹에서 절단 가능성 | 낮음 | 모니터링 |
+
+---
+
+## 14. AI 의견구조화 컨텍스트 강화 (2026-08-11)
+
+### 변경 내용
+
+| # | 파일 | 변경 내용 | 이유 |
+|---|---|---|---|
+| 1 | `ai_api_client.dart` (구 `gemini_api_client.dart`) | `GeminiApiClient` → `AiApiClient` 이름 변경, 파일명 변경 | 향후 OpenAI 등 다른 프로바이더로 교체 시 혼란 방지 |
+| 2 | `ai_api_client.dart`, `functions/index.js` | 모델 `gemini-2.0-flash` → `gemini-2.5-flash` | 2.0-flash deprecated(2026-06-01 이후), 2.5-flash로 업그레이드 |
+| 3 | `ai_api_client.dart`, `gemini_grouping_engine.dart`, `teacher_home_screen.dart` | `groupIdeas()`에 `teacherNotes` 파라미터 추가, 프롬프트 첫 줄에 교사 최근 지시 1개 포함 | 교사 발문 맥락이 있으면 그룹화 제목·분류 품질 향상 |
+| 4 | `ai_api_client.dart`, `teacher_home_screen.dart` | `generateReport()`에 `teacherNotes` 파라미터 추가, 리포트에 교사 지시 타임라인 섹션 포함 | '교사 지시 → 학생 반응' 흐름이 리포트에 반영 |
+| 5 | `moamal_repository.dart`, `firebase_moamal_repository.dart` | `getAllTeacherNotes(sessionCode)` 추가 — `teacher_notes` 전체 시간순 조회 | 리포트 생성 시 세션 재시작 후에도 전체 타임라인 복원 가능 |
+
+### 현재 교사 발문 처리 흐름
+
+```
+교사 발화 → Whisper STT → _latestTranscript
+  ├─ Firestore teacher_notes/{id} 저장 (addTeacherNote)
+  ├─ _teacherNotes 로컬 리스트에 추가
+  └─ groupingEngine.recentTeacherNotes = 최근 2개
+       └─ 다음 Gemini 그룹화 요청 시 프롬프트에 포함
+
+리포트 생성 시
+  └─ _teacherNotes(메모리) 또는 Firestore getAllTeacherNotes()로 전체 조회
+       └─ generateReport(teacherNotes: allNotes) → 타임라인 섹션 포함
+```
+
+### 프롬프트 구조 예시
+
+**그룹화:**
+```
+수업 주제: 2학기 체험학습 | 교사 최근 지시: '자연이나 역사 체험 위주로 아이디어를 제출해 주세요'
+```
+
+**리포트:**
+```
+[교사 지시 타임라인]
+1. "도서관 이용 규칙에 대해 의견을 말해보세요"
+2. "안전 관련 의견도 포함해보세요"
+```
+
+### AI 클라이언트 구조 (프로바이더 교체 대비)
+
+- 상위 인터페이스(`groupIdeas`, `generateReport`, `generateBriefing`)는 프로바이더 무관
+- `_buildGroupBody`, `_buildBriefingBody`, `_buildReportBody`만 Gemini 포맷 의존
+- 교체 시 body builder + `_call()` 내부만 수정, 엔진·화면 코드는 무변경
