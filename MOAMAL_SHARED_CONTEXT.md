@@ -5,7 +5,7 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-07
-- 갱신한 역할: STT (Android 실기기 STT 엔드투엔드 검증 완료)
+- 갱신한 역할: STT (iOS 마이크 권한 추가)
 - 기준 Flutter 커밋: `76496aa` (feat(stt): 교사 학생 마이크 원격 시작(forceStart) 기능 추가)
 
 ## 1. 경영 요약
@@ -66,7 +66,7 @@
   - `kakaoVerify`: 카카오 Custom Token 발급
   - `naverVerify`: 네이버 Custom Token 발급
 - **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
-- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, rate limit 컬렉션)
+- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
 - **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리
@@ -93,7 +93,7 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 → iOS 권한 plist 확인
+- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 (파일럿 전 확인)
 - **Flutter UI/UX**: 실시간 음성 텍스트 박스 BOTTOM OVERFLOWED 22px 레이아웃 수정
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
@@ -104,6 +104,8 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-07 | AI/백엔드 | Firestore 보안 규칙에 `teacher_notes` 하위 컬렉션 추가 (읽기: 인증 사용자, 쓰기: 교사만) → 배포 완료 |
+| 2026-08-07 | STT | iOS Info.plist에 `NSMicrophoneUsageDescription` 추가 — record 패키지 마이크 권한 필수 항목 (미추가 시 iOS에서 녹음 불가) |
 | 2026-08-07 | STT | Android 실기기 STT 엔드투엔드 검증 완료. 전사 샘플: "다들 학급회의 시작할 건데 급식 문제에 대해서 의견 좀 말해보자." 정확 인식. OpenAI 크레딧 미충전이 429 원인이었음 → 충전 후 해결. 미해결: 실시간 음성 박스 BOTTOM OVERFLOWED 22px (Flutter UI/UX 대화방 이관) |
 | 2026-08-07 | AI/백엔드 | Node.js 20 → 22 업그레이드 (`firebase.json`, `functions/package.json`) 및 재배포 완료 |
 | 2026-08-07 | AI/백엔드 | Firestore 보안 규칙 수정: `participants` update에 `isOwner` 조건 추가 (교사가 `forceStop` 필드 쓰기 가능하도록) → 웹 콘솔 배포 완료 |
@@ -144,7 +146,7 @@
 ### 미검증 플랫폼
 
 - ~~Android 실기기 STT 엔드투엔드~~ — **검증 완료 2026-08-07** (whisper-1, OpenAI 크레딧 충전 후 정상 동작)
-- iOS (record 패키지 AVAudioSession 권한 설정, `NSSpeechRecognitionUsageDescription` plist 미확인)
+- iOS: `NSMicrophoneUsageDescription` **추가 완료 2026-08-07**. 실기기 빌드 및 STT 엔드투엔드 미검증.
 - VAD 침묵 임계값(-40 dBFS, 3초): 실제 교실 소음에서 튜닝 필요
 
 ### Firestore 변경: participants 스키마
