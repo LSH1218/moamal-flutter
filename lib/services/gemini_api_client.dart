@@ -6,7 +6,7 @@ import '../models/idea.dart';
 import '../models/meeting_report.dart';
 import 'prompt_config.dart';
 
-const _model = 'gemini-2.0-flash';
+const _model = 'gemini-2.5-flash';
 const _defaultEndpoint =
     'https://asia-northeast3-moamal-1e601.cloudfunctions.net/geminiProxy';
 const _endpoint = String.fromEnvironment(
@@ -19,8 +19,9 @@ class GeminiApiClient {
 
   Future<Map<String, dynamic>> groupIdeas(
       List<Group> existing, List<Idea> newIdeas,
-      {String sessionTitle = ''}) async {
-    final body = _buildGroupBody(existing, newIdeas, sessionTitle: sessionTitle);
+      {String sessionTitle = '', List<String> teacherNotes = const []}) async {
+    final body = _buildGroupBody(existing, newIdeas,
+        sessionTitle: sessionTitle, teacherNotes: teacherNotes);
     final text = await _call(body);
     return jsonDecode(text) as Map<String, dynamic>;
   }
@@ -45,10 +46,11 @@ class GeminiApiClient {
     String sessionTitle,
     List<Group> groups,
     Map<String, int> voteCounts,
-    int totalVoters,
-  ) async {
-    final body =
-        _buildReportBody(sessionTitle, groups, voteCounts, totalVoters);
+    int totalVoters, {
+    List<String> teacherNotes = const [],
+  }) async {
+    final body = _buildReportBody(sessionTitle, groups, voteCounts, totalVoters,
+        teacherNotes: teacherNotes);
     final text = await _call(body);
     return MeetingReport.fromJson(jsonDecode(text) as Map<String, dynamic>);
   }
@@ -92,10 +94,14 @@ class GeminiApiClient {
 
   Map<String, dynamic> _buildGroupBody(
       List<Group> existing, List<Idea> newIdeas,
-      {String sessionTitle = ''}) {
+      {String sessionTitle = '', List<String> teacherNotes = const []}) {
     final sb = StringBuffer();
     if (sessionTitle.isNotEmpty) {
-      sb.writeln('수업 주제: $sessionTitle\n');
+      sb.write('수업 주제: $sessionTitle');
+      if (teacherNotes.isNotEmpty) {
+        sb.write(' | 교사 최근 지시: \'${teacherNotes.last}\'');
+      }
+      sb.writeln('\n');
     }
     if (existing.isNotEmpty) {
       final grps = existing.map((g) => {
