@@ -56,6 +56,13 @@ service cloud.firestore {
         // 삭제: 교사만 (세션 정리용)
         allow delete: if isOwner(sessionCode);
       }
+
+      match /teacher_notes/{noteId} {
+        // 읽기: 인증된 모든 참가자 (학생 화면에서 교사 발화 표시 용도)
+        allow read: if signedIn();
+        // 쓰기: 교사만
+        allow create, update, delete: if isOwner(sessionCode);
+      }
     }
 
     // 교사 화이트리스트 — 로그인한 사용자만 본인 문서 읽기 가능, 쓰기는 Admin SDK만
