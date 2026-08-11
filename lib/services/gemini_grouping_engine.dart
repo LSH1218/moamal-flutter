@@ -1,6 +1,6 @@
 import '../models/group.dart';
 import '../models/idea.dart';
-import 'gemini_api_client.dart';
+import 'ai_api_client.dart';
 import 'grouping_engine.dart';
 import 'idea_chunk_buffer.dart';
 
@@ -11,7 +11,7 @@ const _bufferDebounce = Duration(milliseconds: 2500);
 /// Java GeminiGroupingEngine의 동일한 incremental 전략.
 class GeminiGroupingEngine {
   final _fallback = GroupingEngine();
-  final _api = GeminiApiClient();
+  final _api = AiApiClient();
   final void Function() onUpdate;
 
   late final IdeaChunkBuffer _buffer;

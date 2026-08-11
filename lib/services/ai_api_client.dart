@@ -14,7 +14,7 @@ const _endpoint = String.fromEnvironment(
   defaultValue: _defaultEndpoint,
 );
 
-class GeminiApiClient {
+class AiApiClient {
   // ── 의견 클러스터링 ──────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> groupIdeas(
@@ -178,8 +178,9 @@ class GeminiApiClient {
     String sessionTitle,
     List<Group> groups,
     Map<String, int> voteCounts,
-    int totalVoters,
-  ) {
+    int totalVoters, {
+    List<String> teacherNotes = const [],
+  }) {
     final totalVotes = voteCounts.values.fold(0, (a, b) => a + b);
     final sb = StringBuffer();
     sb.writeln('[회의 정보]');
@@ -187,7 +188,13 @@ class GeminiApiClient {
     if (totalVoters > 0) {
       sb.write(' / 전체 $totalVoters명 (기권 ${totalVoters - totalVotes}명)');
     }
-    sb.writeln('\n\n[의견 묶음]');
+    if (teacherNotes.isNotEmpty) {
+      sb.writeln('\n\n[교사 지시 타임라인]');
+      for (var i = 0; i < teacherNotes.length; i++) {
+        sb.writeln('${i + 1}. "${teacherNotes[i]}"');
+      }
+    }
+    sb.writeln('\n[의견 묶음]');
     for (var i = 0; i < groups.length; i++) {
       final g = groups[i];
       final title = g.aiTitle ?? '묶음 ${i + 1}';

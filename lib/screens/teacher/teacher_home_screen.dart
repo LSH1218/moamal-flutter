@@ -9,7 +9,7 @@ import '../../models/meeting_report.dart';
 import '../../models/session_state.dart';
 import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/auth_service.dart';
-import '../../services/gemini_api_client.dart';
+import '../../services/ai_api_client.dart';
 import '../../services/gemini_grouping_engine.dart';
 import '../../services/whisper_stt_client.dart';
 import '../../theme/app_theme.dart';
@@ -46,6 +46,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   String? _latestTranscript;
   _MicStatus _micStatus = _MicStatus.idle;
   bool _isToggleMode = false;
+  final _teacherNotes = <String>[];
 
   @override
   void initState() {
@@ -106,7 +107,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       _groups = _groupingEngine.makeGroups(_session.ideas);
     });
     if (_groups.isEmpty) return;
-    GeminiApiClient()
+    AiApiClient()
         .generateBriefing(_session.title, _groups, _session.ideas)
         .then((r) {
       if (!mounted) return;
@@ -119,8 +120,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     setState(() => _isGeneratingReport = true);
     try {
       final counts = _groupingEngine.voteCounts(_groups, _session.votes);
-      final report = await GeminiApiClient()
-          .generateReport(_session.title, _groups, counts, 0);
+      final allNotes = _teacherNotes.isNotEmpty
+          ? _teacherNotes
+          : await _repo.getAllTeacherNotes(_session.sessionCode);
+      final report = await AiApiClient().generateReport(
+          _session.title, _groups, counts, 0,
+          teacherNotes: allNotes);
       if (mounted) setState(() => _meetingReport = report);
     } catch (e) {
       if (mounted) {
@@ -157,6 +162,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         _elapsedText = '00:00';
         _latestTranscript = null;
       });
+      _teacherNotes.clear();
     }
   }
 
@@ -182,6 +188,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_session.title));
       if (!mounted) return;
       setState(() => _latestTranscript = text);
+      _teacherNotes.add(text);
+      _groupingEngine.recentTeacherNotes =
+          _teacherNotes.length <= 2 ? List.of(_teacherNotes) : _teacherNotes.sublist(_teacherNotes.length - 2);
       await _repo.addTeacherNote(sessionCode: _session.sessionCode, text: text);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
