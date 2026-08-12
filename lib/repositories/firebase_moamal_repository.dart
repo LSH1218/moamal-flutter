@@ -181,9 +181,10 @@ class FirebaseMoamalRepository implements MoamalRepository {
   // ── Teacher notes ─────────────────────────────────────────────────────────
 
   @override
-  Future<void> addTeacherNote({required String sessionCode, required String text}) async {
+  Future<void> addTeacherNote({required String sessionCode, required String text, required String uid}) async {
     await _sessionRef(sessionCode).collection('teacher_notes').add({
       'text': text,
+      'uid': uid,
       'createdAt': FieldValue.serverTimestamp(),
       'type': 'instruction',
     });

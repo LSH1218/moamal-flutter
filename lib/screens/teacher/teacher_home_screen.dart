@@ -191,7 +191,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       _teacherNotes.add(text);
       _groupingEngine.recentTeacherNotes =
           _teacherNotes.length <= 2 ? List.of(_teacherNotes) : _teacherNotes.sublist(_teacherNotes.length - 2);
-      await _repo.addTeacherNote(sessionCode: _session.sessionCode, text: text);
+      await _repo.addTeacherNote(sessionCode: _session.sessionCode, text: text, uid: _auth.currentUid!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

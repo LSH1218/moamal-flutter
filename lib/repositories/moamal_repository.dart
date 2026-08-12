@@ -16,7 +16,7 @@ abstract class MoamalRepository {
   void stopListening();
 
   // ── Teacher notes ──────────────────────────────────────────────────────
-  Future<void> addTeacherNote({required String sessionCode, required String text});
+  Future<void> addTeacherNote({required String sessionCode, required String text, required String uid});
   Future<List<String>> getAllTeacherNotes(String sessionCode);
 
   // ── Teacher mic control ────────────────────────────────────────────────
