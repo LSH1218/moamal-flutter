@@ -4,8 +4,8 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-11
-- 갱신한 역할: AI 의견구조화 (교사 발문 컨텍스트 강화, 모델 업그레이드, 클라이언트 리팩토링)
+- 마지막 갱신일: 2026-08-12
+- 갱신한 역할: STT (파이프라인 점검 및 _SttBox fallback 버그 수정)
 - 기준 Flutter 커밋: `45a647f` (feat(ai): 교사 발문 컨텍스트 강화 및 모델/클라이언트 리팩토링)
 
 ## 1. 경영 요약
@@ -93,7 +93,7 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 (파일럿 전 확인)
+- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 (파일럿 전 확인); iOS 실기기 빌드 및 STT 엔드투엔드 검증
 - **Flutter UI/UX**: 실시간 음성 텍스트 박스 BOTTOM OVERFLOWED 22px 레이아웃 수정
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
@@ -104,6 +104,8 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-12 | STT | 교사 STT 파이프라인 점검 완료: 전사 loss 없음, 학생 IdeaChunkBuffer·submitIdea()와 완전 분리 확인, addTeacherNote() 구현 정상 확인 |
+| 2026-08-12 | STT | `teacher_home_screen.dart` `_SttBox` 학생 아이디어 fallback 제거 — 교사 발화 없을 때 마지막 학생 아이디어가 "실시간 음성" 박스에 표시되던 버그 수정 |
 | 2026-08-11 | AI 의견구조화 | `GeminiApiClient` → `AiApiClient` 이름 변경 (`gemini_api_client.dart` → `ai_api_client.dart`), 프로바이더 교체 대비 |
 | 2026-08-11 | AI 의견구조화 | Gemini 모델 `gemini-2.0-flash` → `gemini-2.5-flash` 업그레이드, `functions/index.js` allowedModels 추가 |
 | 2026-08-11 | AI 의견구조화 | 교사 발문 컨텍스트 강화: `groupIdeas()` + `generateReport()`에 `teacherNotes` 파라미터 추가, 그룹화 프롬프트에 최근 지시 1개 포함, 리포트에 지시 타임라인 섹션 추가 (§14 참조) |
