@@ -111,9 +111,9 @@ joinedAt: Timestamp
 ### geminiProxy
 - **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/geminiProxy`
 - **인증**: `Authorization: Bearer {Firebase ID Token}`
-- **허용 모델**: `gemini-2.0-flash`, `gemini-2.0-flash-lite`
+- **허용 모델**: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
 - **Rate limit**: 분당 20회 (uid 기준)
-- **요청 body**: `{ "model": "gemini-2.0-flash", ...geminiBody }`
+- **요청 body**: `{ "model": "gemini-2.5-flash", ...geminiBody }`
 - **응답**: `{ "text": "..." }`
 
 ### kakaoVerify
