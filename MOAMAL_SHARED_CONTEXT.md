@@ -5,8 +5,8 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-14
-- 갱신한 역할: AI 의견구조화 (Gemini → GPT-5.6 Luna 교체)
-- 기준 Flutter 커밋: `3891634` (feat(ai): Gemini → GPT-5.6 Luna 교체, OpenAI Chat Completions 포맷 적용)
+- 갱신한 역할: STT (gpt-transcribe 전환 및 무음 처리 개선)
+- 기준 Flutter 커밋: `e6af392` (feat(stt): gpt-transcribe 모델 전환 및 무음 처리 개선)
 
 ## 1. 경영 요약
 
@@ -61,7 +61,7 @@
 ## 5. 배포·운영 현황 (2026-07-25 기준)
 
 - **Cloud Functions**: 5개 함수 배포 완료 (asia-northeast3)
-  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `whisper-1`** (2026-08-07 `gpt-4o-mini-transcribe`에서 교체). **v2 URL**: `https://transcribeaudio-xzj4mtcbda-du.a.run.app`
+  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `gpt-transcribe`** (2026-08-14 `whisper-1`에서 교체 — 정확도 Highest, 비용 $0.0045/분). **v2 URL**: `https://transcribeaudio-xzj4mtcbda-du.a.run.app`
   - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit. **v2 URL**: `https://geminiproxy-xzj4mtcbda-du.a.run.app`. allowedModels: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
   - `openaiProxy`: OpenAI Chat Completions 프록시, 분당 20회 rate limit. **URL**: `https://asia-northeast3-moamal-1e601.cloudfunctions.net/openaiProxy`. allowedModels: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
   - `kakaoVerify`: 카카오 Custom Token 발급
@@ -96,7 +96,7 @@
 
 > Mercury QA 발견 버그 상세는 `BUG_LOG.md` 참조.
 
-- **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); (P2) PTT 무음 시 Whisper 환각 방지 (최소 녹음 시간 체크); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
+- **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
 - **AI 의견구조화**: Gemini 그룹화 실제 작동 재검증 (geminiProxy URL 수정 후); 그룹 승인 화면 빈 카드 원인 추가 확인
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
@@ -107,6 +107,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-14 | STT | `transcribeAudio` STT 모델 `whisper-1` → `gpt-transcribe` 전환 (정확도 Average → Highest, 비용 $0.006 → $0.0045/분, 25% 절감). 동일 엔드포인트(`v1/audio/transcriptions`) 유지. 무음/짧은 녹음 시 OpenAI 400 응답 → 빈 텍스트 정상 처리. `whisper_stt_client.dart` 빈 전사 결과 throw 제거 → 빈 문자열 반환. 교사/학생/MicButton 호출부 빈 결과 무시 처리 추가 |
 | 2026-08-13 | Flutter UI/UX | 슈퍼바이저 모드에 기존 세션 재개 기능 추가 — PIN 1218 후 "새 세션 시작" / "기존 세션 재개" 선택. 재개 시 코드 입력 → Firestore 기존 데이터 그대로 로드 (`landing_screen.dart`, `teacher_home_screen.dart`: `existingCode` 파라미터 추가) |
 | 2026-08-13 | AI/백엔드 | `ai_api_client.dart` `_defaultEndpoint` v1 URL → v2 URL 교체 (`https://geminiproxy-xzj4mtcbda-du.a.run.app`) — 리포트 생성·Gemini 그룹화 400 에러 원인 해결 |
 | 2026-08-14 | AI 의견구조화 | `ai_api_client.dart` Gemini → GPT-5.6 Luna 교체: 엔드포인트 openaiProxy, OpenAI Chat Completions 포맷 적용, `_stripMarkdown()` 제거, timeout 30초, 브리핑 max_tokens 512 (§14 갱신) |
@@ -160,7 +161,7 @@
 
 ### 미검증 플랫폼
 
-- ~~Android 실기기 STT 엔드투엔드~~ — **검증 완료 2026-08-07** (whisper-1, OpenAI 크레딧 충전 후 정상 동작)
+- ~~Android 실기기 STT 엔드투엔드~~ — **검증 완료 2026-08-14** (gpt-transcribe, 전사 및 무음 처리 정상 동작)
 - iOS: `NSMicrophoneUsageDescription` **추가 완료 2026-08-07**. 실기기 빌드 및 STT 엔드투엔드 미검증.
 - VAD 침묵 임계값(-40 dBFS, 3초): 실제 교실 소음에서 튜닝 필요
 
