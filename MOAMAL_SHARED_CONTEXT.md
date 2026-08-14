@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-13
-- 갱신한 역할: QA (Mercury) + AI/백엔드 + Flutter UI/UX
-- 기준 Flutter 커밋: `45a647f` (feat(ai): 교사 발문 컨텍스트 강화 및 모델/클라이언트 리팩토링)
+- 마지막 갱신일: 2026-08-14
+- 갱신한 역할: AI 의견구조화 (Gemini → GPT-5.6 Luna 교체)
+- 기준 Flutter 커밋: `3891634` (feat(ai): Gemini → GPT-5.6 Luna 교체, OpenAI Chat Completions 포맷 적용)
 
 ## 1. 경영 요약
 
@@ -109,6 +109,7 @@
 |---|---|---|
 | 2026-08-13 | Flutter UI/UX | 슈퍼바이저 모드에 기존 세션 재개 기능 추가 — PIN 1218 후 "새 세션 시작" / "기존 세션 재개" 선택. 재개 시 코드 입력 → Firestore 기존 데이터 그대로 로드 (`landing_screen.dart`, `teacher_home_screen.dart`: `existingCode` 파라미터 추가) |
 | 2026-08-13 | AI/백엔드 | `ai_api_client.dart` `_defaultEndpoint` v1 URL → v2 URL 교체 (`https://geminiproxy-xzj4mtcbda-du.a.run.app`) — 리포트 생성·Gemini 그룹화 400 에러 원인 해결 |
+| 2026-08-14 | AI 의견구조화 | `ai_api_client.dart` Gemini → GPT-5.6 Luna 교체: 엔드포인트 openaiProxy, OpenAI Chat Completions 포맷 적용, `_stripMarkdown()` 제거, timeout 30초, 브리핑 max_tokens 512 (§14 갱신) |
 | 2026-08-14 | AI/백엔드 | `openaiProxy` Cloud Function 추가 배포 (Chat Completions 프록시, 분당 20회, allowedModels: gpt-5.6-luna/terra/sol). `openaiRateLimits` Firestore 규칙 추가 |
 | 2026-08-13 | AI/백엔드 | `gemini-2.5-flash` allowedGeminiModels 추가 후 Functions 재배포 완료 |
 | 2026-08-13 | QA | Mercury QA 단계 완료 (단일 기기, 교사 세션). 핵심 흐름 통과. 발견 버그 8건 `BUG_LOG.md` 기록 — P1 2건(geminiProxy URL·Firestore 리스너), P2 5건(UI overflow·VAD·PTT 환각·세션코드·공유버튼), P3 1건(타이머) |
@@ -322,5 +323,18 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 ### AI 클라이언트 구조 (프로바이더 교체 대비)
 
 - 상위 인터페이스(`groupIdeas`, `generateReport`, `generateBriefing`)는 프로바이더 무관
-- `_buildGroupBody`, `_buildBriefingBody`, `_buildReportBody`만 Gemini 포맷 의존
+- `_buildGroupBody`, `_buildBriefingBody`, `_buildReportBody`만 포맷 의존
 - 교체 시 body builder + `_call()` 내부만 수정, 엔진·화면 코드는 무변경
+
+### 현재 AI 클라이언트 설정 (2026-08-14 기준)
+
+| 항목 | 값 |
+|---|---|
+| 모델 | `gpt-5.6-luna` |
+| 엔드포인트 | `https://openaiproxy-xzj4mtcbda-du.a.run.app` |
+| 환경변수 | `AI_PROXY_URL` |
+| 포맷 | OpenAI Chat Completions (`messages`, `response_format: json_object`) |
+| timeout | 30초 |
+| 그룹화 max_tokens | 1024 |
+| 브리핑 max_tokens | 512 |
+| 리포트 max_tokens | 1024 |
