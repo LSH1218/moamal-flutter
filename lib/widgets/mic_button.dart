@@ -93,7 +93,7 @@ class _MicButtonState extends State<MicButton> {
     setState(() => _status = _Status.transcribing);
     try {
       final text = await widget.sttClient.stopAndTranscribe(widget.prompt);
-      widget.onResult(text);
+      if (text.isNotEmpty) widget.onResult(text);
     } catch (e) {
       widget.onError(e.toString());
     } finally {

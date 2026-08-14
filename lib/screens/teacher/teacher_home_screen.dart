@@ -18,7 +18,8 @@ import 'report_screen.dart';
 
 class TeacherHomeScreen extends StatefulWidget {
   final String? initialTitle;
-  const TeacherHomeScreen({super.key, this.initialTitle});
+  final String? existingCode;
+  const TeacherHomeScreen({super.key, this.initialTitle, this.existingCode});
 
   @override
   State<TeacherHomeScreen> createState() => _TeacherHomeScreenState();
@@ -68,13 +69,24 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     _repo = context.read<FirebaseMoamalRepository>();
 
     final uid = _auth.currentUid!;
-    var newSession = _session.copyWith(ownerUid: uid);
-    if (widget.initialTitle != null && widget.initialTitle!.isNotEmpty) {
-      newSession = newSession.copyWith(title: widget.initialTitle);
-    }
-    await _repo.publishSession(newSession);
 
-    _repo.listenToSession(newSession.sessionCode).listen((state) {
+    final String sessionCode;
+    if (widget.existingCode != null) {
+      sessionCode = widget.existingCode!;
+      setState(() {
+        _session = _session.copyWith(sessionCode: sessionCode, ownerUid: uid);
+      });
+    } else {
+      var newSession = _session.copyWith(ownerUid: uid);
+      if (widget.initialTitle != null && widget.initialTitle!.isNotEmpty) {
+        newSession = newSession.copyWith(title: widget.initialTitle);
+      }
+      await _repo.publishSession(newSession);
+      sessionCode = newSession.sessionCode;
+      setState(() => _session = newSession);
+    }
+
+    _repo.listenToSession(sessionCode).listen((state) {
       if (!mounted) return;
       _groupingEngine.sessionTitle = state.title;
       setState(() {
@@ -88,10 +100,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       if (mounted) setState(() => _elapsedText = _formatElapsed());
     });
 
-    setState(() {
-      _session = newSession;
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
   }
 
   String _formatElapsed() {
@@ -187,6 +196,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     try {
       final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_session.title));
       if (!mounted) return;
+      if (text.isEmpty) return;
       setState(() => _latestTranscript = text);
       _teacherNotes.add(text);
       _groupingEngine.recentTeacherNotes =

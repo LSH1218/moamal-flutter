@@ -127,7 +127,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen> {
       final text = await _sttClient.stopAndTranscribe(buildWhisperPrompt(_sessionTitle));
       if (mounted) {
         setState(() => _micStatus = _MicStatus.idle);
-        await _showDraftSheet(text);
+        if (text.isNotEmpty) await _showDraftSheet(text);
       }
     } catch (e) {
       if (mounted) {

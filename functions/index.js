@@ -62,7 +62,7 @@ exports.transcribeAudio = onRequest(
         await enforceRateLimit(uid);
 
         const form = new FormData();
-        form.append("model", "whisper-1");
+        form.append("model", "gpt-transcribe");
         form.append("language", "ko");
         const whisperPrompt = typeof request.query.prompt === "string" ? request.query.prompt.slice(0, 500) : "";
         if (whisperPrompt) form.append("prompt", whisperPrompt);
@@ -75,6 +75,11 @@ exports.transcribeAudio = onRequest(
         });
 
         if (!upstream.ok) {
+          if (upstream.status === 400) {
+            // 음성 없음(무음) — 빈 텍스트로 정상 응답
+            response.set("Cache-Control", "no-store").status(200).json({text: ""});
+            return;
+          }
           logger.error("OpenAI transcription failed", {
             status: upstream.status,
             uid,
@@ -85,10 +90,6 @@ exports.transcribeAudio = onRequest(
 
         const result = await upstream.json();
         const text = typeof result.text === "string" ? result.text.trim() : "";
-        if (!text) {
-          response.status(502).json({error: "empty_transcription"});
-          return;
-        }
 
         response.set("Cache-Control", "no-store").status(200).json({text});
       } catch (error) {

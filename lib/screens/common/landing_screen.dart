@@ -42,15 +42,80 @@ class _LandingScreenState extends State<LandingScreen> {
       final auth = context.read<AuthService>();
       await auth.signInAnonymously();
       if (!mounted) return;
-      final title = await _showTitleDialog(context);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TeacherHomeScreen(initialTitle: title),
-        ),
-      );
+
+      final mode = await _showSessionModeDialog(context);
+      if (!mounted || mode == null) return;
+
+      if (mode == 'resume') {
+        final code = await _showCodeInputDialog(context);
+        if (!mounted || code == null || code.isEmpty) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                TeacherHomeScreen(existingCode: code.toUpperCase()),
+          ),
+        );
+      } else {
+        final title = await _showTitleDialog(context);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherHomeScreen(initialTitle: title),
+          ),
+        );
+      }
     }
+  }
+
+  Future<String?> _showSessionModeDialog(BuildContext context) {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('세션 선택'),
+        content: const Text('새 수업을 시작하거나 기존 세션 코드로 진입할 수 있어요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'resume'),
+            child: const Text('기존 세션 재개'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'new'),
+            child: const Text('새 세션 시작'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _showCodeInputDialog(BuildContext context) {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('세션 코드 입력'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(hintText: '예) JO1F8Z'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('진입'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

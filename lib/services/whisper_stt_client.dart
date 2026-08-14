@@ -139,8 +139,7 @@ class WhisperSttClient {
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final text = json['text'] as String?;
-      if (text == null || text.trim().isEmpty) throw Exception('빈 전사 결과입니다.');
-      return text.trim();
+      return text?.trim() ?? '';
     }
 
     // 5xx: 서버 일시 오류 → 재시도
