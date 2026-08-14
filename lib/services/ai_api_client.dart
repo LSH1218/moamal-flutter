@@ -6,11 +6,10 @@ import '../models/idea.dart';
 import '../models/meeting_report.dart';
 import 'prompt_config.dart';
 
-const _model = 'gemini-2.5-flash';
-const _defaultEndpoint =
-    'https://asia-northeast3-moamal-1e601.cloudfunctions.net/geminiProxy';
+const _model = 'gpt-5.6-luna';
+const _defaultEndpoint = 'https://openaiproxy-xzj4mtcbda-du.a.run.app';
 const _endpoint = String.fromEnvironment(
-  'GEMINI_PROXY_URL',
+  'AI_PROXY_URL',
   defaultValue: _defaultEndpoint,
 );
 
@@ -57,7 +56,7 @@ class AiApiClient {
 
   // ── HTTP 공통 ────────────────────────────────────────────────────────────
 
-  Future<String> _call(Map<String, dynamic> geminiBody) async {
+  Future<String> _call(Map<String, dynamic> body) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('로그인이 필요합니다.');
     final idToken = await user.getIdToken();
@@ -68,8 +67,8 @@ class AiApiClient {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'model': _model, ...geminiBody}),
-    ).timeout(const Duration(seconds: 10));
+      body: jsonEncode({'model': _model, ...body}),
+    ).timeout(const Duration(seconds: 30));
 
     if (resp.statusCode == 429) throw Exception('요청이 너무 많습니다. 잠시 후 다시 시도하세요.');
     if (resp.statusCode != 200) {
@@ -77,20 +76,10 @@ class AiApiClient {
     }
 
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
-    return _stripMarkdown(json['text'] as String);
+    return json['text'] as String;
   }
 
-  String _stripMarkdown(String text) {
-    final s = text.trim();
-    if (s.startsWith('```')) {
-      final start = s.indexOf('\n') + 1;
-      final end = s.lastIndexOf('```');
-      if (start > 0 && end > start) return s.substring(start, end).trim();
-    }
-    return s;
-  }
-
-  // ── Body builders ────────────────────────────────────────────────────────
+  // ── Body builders (OpenAI Chat Completions 포맷) ─────────────────────────
 
   Map<String, dynamic> _buildGroupBody(
       List<Group> existing, List<Idea> newIdeas,
@@ -116,24 +105,13 @@ class AiApiClient {
     sb.write('새 의견:\n${jsonEncode(ideas)}');
 
     return {
-      'system_instruction': {
-        'parts': [
-          {'text': PromptConfig.groupingSystem()}
-        ]
-      },
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': sb.toString()}
-          ]
-        }
+      'messages': [
+        {'role': 'system', 'content': PromptConfig.groupingSystem()},
+        {'role': 'user', 'content': sb.toString()},
       ],
-      'generationConfig': {
-        'responseMimeType': 'application/json',
-        'temperature': 0.1,
-        'maxOutputTokens': 1024,
-      },
+      'temperature': 0.1,
+      'max_tokens': 1024,
+      'response_format': {'type': 'json_object'},
     };
   }
 
@@ -153,24 +131,13 @@ class AiApiClient {
     sb.write(PromptConfig.briefingFormat());
 
     return {
-      'system_instruction': {
-        'parts': [
-          {'text': PromptConfig.briefingSystem()}
-        ]
-      },
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': sb.toString()}
-          ]
-        }
+      'messages': [
+        {'role': 'system', 'content': PromptConfig.briefingSystem()},
+        {'role': 'user', 'content': sb.toString()},
       ],
-      'generationConfig': {
-        'responseMimeType': 'application/json',
-        'temperature': 0.4,
-        'maxOutputTokens': 256,
-      },
+      'temperature': 0.4,
+      'max_tokens': 512,
+      'response_format': {'type': 'json_object'},
     };
   }
 
@@ -208,24 +175,13 @@ class AiApiClient {
     sb.write(PromptConfig.reportFormat());
 
     return {
-      'system_instruction': {
-        'parts': [
-          {'text': PromptConfig.reportSystem()}
-        ]
-      },
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': sb.toString()}
-          ]
-        }
+      'messages': [
+        {'role': 'system', 'content': PromptConfig.reportSystem()},
+        {'role': 'user', 'content': sb.toString()},
       ],
-      'generationConfig': {
-        'responseMimeType': 'application/json',
-        'temperature': 0.2,
-        'maxOutputTokens': 1024,
-      },
+      'temperature': 0.2,
+      'max_tokens': 1024,
+      'response_format': {'type': 'json_object'},
     };
   }
 }
