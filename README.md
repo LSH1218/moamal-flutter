@@ -116,6 +116,14 @@ joinedAt: Timestamp
 - **요청 body**: `{ "model": "gemini-2.5-flash", ...geminiBody }`
 - **응답**: `{ "text": "..." }`
 
+### openaiProxy
+- **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/openaiProxy`
+- **인증**: `Authorization: Bearer {Firebase ID Token}`
+- **허용 모델**: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
+- **Rate limit**: 분당 20회 (uid 기준)
+- **요청 body**: `{ "model": "gpt-5.6-luna", "messages": [...], "temperature": 0.1, ... }`
+- **응답**: `{ "text": "..." }` (`choices[0].message.content`)
+
 ### kakaoVerify
 - **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/kakaoVerify`
 - **인증**: 없음 (로그인 전 호출)
@@ -146,6 +154,7 @@ joinedAt: Timestamp
 | teacher_notes | 로그인 사용자 | 교사만 |
 | sttRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 | geminiRateLimits | 차단 | 차단 (Functions Admin SDK만) |
+| openaiRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 
 ---
 

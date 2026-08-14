@@ -4,8 +4,8 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-12
-- 갱신한 역할: STT (파이프라인 점검 및 _SttBox fallback 버그 수정)
+- 마지막 갱신일: 2026-08-13
+- 갱신한 역할: QA (Mercury) + AI/백엔드 + Flutter UI/UX
 - 기준 Flutter 커밋: `45a647f` (feat(ai): 교사 발문 컨텍스트 강화 및 모델/클라이언트 리팩토링)
 
 ## 1. 경영 요약
@@ -60,13 +60,14 @@
 
 ## 5. 배포·운영 현황 (2026-07-25 기준)
 
-- **Cloud Functions**: 4개 함수 배포 완료 (asia-northeast3)
-  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `whisper-1`** (2026-08-07 `gpt-4o-mini-transcribe`에서 교체)
-  - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit
+- **Cloud Functions**: 5개 함수 배포 완료 (asia-northeast3)
+  - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `whisper-1`** (2026-08-07 `gpt-4o-mini-transcribe`에서 교체). **v2 URL**: `https://transcribeaudio-xzj4mtcbda-du.a.run.app`
+  - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit. **v2 URL**: `https://geminiproxy-xzj4mtcbda-du.a.run.app`. allowedModels: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
+  - `openaiProxy`: OpenAI Chat Completions 프록시, 분당 20회 rate limit. **URL**: `https://asia-northeast3-moamal-1e601.cloudfunctions.net/openaiProxy`. allowedModels: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
   - `kakaoVerify`: 카카오 Custom Token 발급
   - `naverVerify`: 네이버 Custom Token 발급
 - **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
-- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, rate limit 컬렉션)
+- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, openaiRateLimits, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
 - **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리
@@ -93,18 +94,24 @@
 
 ## 8. 대화방별 다음 행동
 
-- **STT**: VAD 임계값(-40 dBFS, 3초) 실제 교실 소음 튜닝 (파일럿 전 확인); iOS 실기기 빌드 및 STT 엔드투엔드 검증
-- **Flutter UI/UX**: 실시간 음성 텍스트 박스 BOTTOM OVERFLOWED 22px 레이아웃 수정
+> Mercury QA 발견 버그 상세는 `BUG_LOG.md` 참조.
+
+- **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); (P2) PTT 무음 시 Whisper 환각 방지 (최소 녹음 시간 체크); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
+- **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
+- **AI 의견구조화**: Gemini 그룹화 실제 작동 재검증 (geminiProxy URL 수정 후); 그룹 승인 화면 빈 카드 원인 추가 확인
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
-- **App 개발**: `flutter analyze` 후 오류 수정; 실기기 통합 테스트
-- **Flutter UI/UX**: 카카오/네이버 로그인 버튼 UI, 학생 입장 이름 입력 화면
-- **전략기획**: 파일럿 교사 섭외 및 일정 확정
+- **App 개발**: `flutter analyze` 후 오류 수정; Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 (UI 수정 후)
+- **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의)
 
 ## 9. 최근 변경 기록
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-13 | Flutter UI/UX | 슈퍼바이저 모드에 기존 세션 재개 기능 추가 — PIN 1218 후 "새 세션 시작" / "기존 세션 재개" 선택. 재개 시 코드 입력 → Firestore 기존 데이터 그대로 로드 (`landing_screen.dart`, `teacher_home_screen.dart`: `existingCode` 파라미터 추가) |
+| 2026-08-13 | AI/백엔드 | `ai_api_client.dart` `_defaultEndpoint` v1 URL → v2 URL 교체 (`https://geminiproxy-xzj4mtcbda-du.a.run.app`) — 리포트 생성·Gemini 그룹화 400 에러 원인 해결 |
+| 2026-08-14 | AI/백엔드 | `openaiProxy` Cloud Function 추가 배포 (Chat Completions 프록시, 분당 20회, allowedModels: gpt-5.6-luna/terra/sol). `openaiRateLimits` Firestore 규칙 추가 |
 | 2026-08-13 | AI/백엔드 | `gemini-2.5-flash` allowedGeminiModels 추가 후 Functions 재배포 완료 |
+| 2026-08-13 | QA | Mercury QA 단계 완료 (단일 기기, 교사 세션). 핵심 흐름 통과. 발견 버그 8건 `BUG_LOG.md` 기록 — P1 2건(geminiProxy URL·Firestore 리스너), P2 5건(UI overflow·VAD·PTT 환각·세션코드·공유버튼), P3 1건(타이머) |
 | 2026-08-12 | STT | 교사 STT 파이프라인 점검 완료: 전사 loss 없음, 학생 IdeaChunkBuffer·submitIdea()와 완전 분리 확인, addTeacherNote() 구현 정상 확인 |
 | 2026-08-12 | STT | `teacher_home_screen.dart` `_SttBox` 학생 아이디어 fallback 제거 — 교사 발화 없을 때 마지막 학생 아이디어가 "실시간 음성" 박스에 표시되던 버그 수정 |
 | 2026-08-11 | AI 의견구조화 | `GeminiApiClient` → `AiApiClient` 이름 변경 (`gemini_api_client.dart` → `ai_api_client.dart`), 프로바이더 교체 대비 |
