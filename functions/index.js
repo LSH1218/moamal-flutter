@@ -19,6 +19,11 @@ const allowedGeminiModels = new Set([
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
 ]);
+const allowedOpenAiModels = new Set([
+  "gpt-5.6-luna",
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
+]);
 const maxAudioBytes = 10 * 1024 * 1024;
 const allowedContentTypes = new Set([
   "audio/mp4",
@@ -207,6 +212,21 @@ async function enforceGeminiRateLimit(uid) {
   });
 }
 
+async function enforceOpenAiRateLimit(uid) {
+  const bucket = Math.floor(Date.now() / 60000);
+  const ref = getFirestore().doc(`openaiRateLimits/${uid}_${bucket}`);
+  await getFirestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const count = snapshot.exists ? snapshot.data().count || 0 : 0;
+    if (count >= 20) throw codedError("rate_limited");
+    transaction.set(ref, {
+      count: count + 1,
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 function normalizedContentType(value) {
   return String(value || "").split(";", 1)[0].trim().toLowerCase();
 }
@@ -216,6 +236,71 @@ function codedError(code) {
   error.code = code;
   return error;
 }
+
+// ── OpenAI Chat Completions 프록시 ───────────────────────────────────────────
+
+exports.openaiProxy = onRequest(
+    {
+      region: "asia-northeast3",
+      secrets: [openAiApiKey],
+      timeoutSeconds: 60,
+      memory: "256MiB",
+      maxInstances: 10,
+    },
+    async (request, response) => {
+      if (request.method !== "POST") {
+        response.set("Allow", "POST").status(405).json({error: "method_not_allowed"});
+        return;
+      }
+
+      try {
+        const uid = await authenticatedUid(request);
+        const {model, ...openAiBody} = request.body ?? {};
+
+        if (!model || !allowedOpenAiModels.has(model)) {
+          response.status(400).json({error: "invalid_model"});
+          return;
+        }
+
+        await enforceOpenAiRateLimit(uid);
+
+        const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openAiApiKey.value()}`,
+          },
+          body: JSON.stringify({model, ...openAiBody}),
+        });
+
+        if (!upstream.ok) {
+          logger.error("OpenAI chat completions failed", {status: upstream.status, uid});
+          response.status(502).json({error: "openai_failed"});
+          return;
+        }
+
+        const result = await upstream.json();
+        const text = result?.choices?.[0]?.message?.content;
+        if (typeof text !== "string" || !text) {
+          response.status(502).json({error: "empty_response"});
+          return;
+        }
+
+        response.set("Cache-Control", "no-store").status(200).json({text});
+      } catch (error) {
+        if (error && error.code === "rate_limited") {
+          response.status(429).json({error: "rate_limited"});
+          return;
+        }
+        if (error && error.code === "unauthenticated") {
+          response.status(401).json({error: "unauthenticated"});
+          return;
+        }
+        logger.error("OpenAI proxy request failed", error);
+        response.status(500).json({error: "internal"});
+      }
+    },
+);
 
 // ── 카카오 소셜 로그인 ────────────────────────────────────────────────────────
 

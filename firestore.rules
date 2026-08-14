@@ -82,5 +82,10 @@ service cloud.firestore {
     match /geminiRateLimits/{doc} {
       allow read, write: if false;
     }
+
+    // OpenAI rate limit 문서 — Cloud Functions Admin SDK만 접근, 클라이언트 완전 차단
+    match /openaiRateLimits/{doc} {
+      allow read, write: if false;
+    }
   }
 }
