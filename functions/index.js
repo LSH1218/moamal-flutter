@@ -275,8 +275,9 @@ exports.openaiProxy = onRequest(
         });
 
         if (!upstream.ok) {
-          logger.error("OpenAI chat completions failed", {status: upstream.status, uid});
-          response.status(502).json({error: "openai_failed"});
+          const errBody = await upstream.text().catch(() => "(읽기 실패)");
+          logger.error(`OpenAI chat completions failed: ${errBody}`, {status: upstream.status, uid});
+          response.status(502).json({error: "openai_failed", detail: errBody});
           return;
         }
 
