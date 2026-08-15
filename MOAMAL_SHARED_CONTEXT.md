@@ -63,7 +63,7 @@
 - **Cloud Functions**: 5개 함수 배포 완료 (asia-northeast3)
   - `transcribeAudio`: STT 프록시, 분당 10회 rate limit. **모델: `gpt-transcribe`** (2026-08-14 `whisper-1`에서 교체 — 정확도 Highest, 비용 $0.0045/분). **v2 URL**: `https://transcribeaudio-xzj4mtcbda-du.a.run.app`
   - `geminiProxy`: Gemini AI 프록시, 분당 20회 rate limit. **v2 URL**: `https://geminiproxy-xzj4mtcbda-du.a.run.app`. allowedModels: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
-  - `openaiProxy`: OpenAI Chat Completions 프록시, 분당 20회 rate limit. **URL**: `https://asia-northeast3-moamal-1e601.cloudfunctions.net/openaiProxy`. allowedModels: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
+  - `openaiProxy`: OpenAI Chat Completions 프록시, 분당 20회 rate limit. **v2 URL**: `https://openaiproxy-xzj4mtcbda-du.a.run.app`. allowedModels: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
   - `kakaoVerify`: 카카오 Custom Token 발급
   - `naverVerify`: 네이버 Custom Token 발급
 - **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
@@ -98,7 +98,7 @@
 
 - **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
-- **AI 의견구조화**: Gemini 그룹화 실제 작동 재검증 (geminiProxy URL 수정 후); 그룹 승인 화면 빈 카드 원인 추가 확인
+- **AI 의견구조화**: openaiProxy 502 에러 원인 파악 및 해결 (GPT 전환 후 첫 실기기 검증); 그룹 승인 화면 빈 카드 원인 추가 확인 (Gemini 시절 미해결 — GPT 전환 후 재검증 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 (UI 수정 후)
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의)
@@ -107,6 +107,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-15 | AI/백엔드 | `transcribeAudio` 무음 400 → 빈텍스트 정상처리, `openaiProxy` 에러 본문 detail 포함, 재배포 완료 |
 | 2026-08-14 | STT | `transcribeAudio` STT 모델 `whisper-1` → `gpt-transcribe` 전환 (정확도 Average → Highest, 비용 $0.006 → $0.0045/분, 25% 절감). 동일 엔드포인트(`v1/audio/transcriptions`) 유지. 무음/짧은 녹음 시 OpenAI 400 응답 → 빈 텍스트 정상 처리. `whisper_stt_client.dart` 빈 전사 결과 throw 제거 → 빈 문자열 반환. 교사/학생/MicButton 호출부 빈 결과 무시 처리 추가 |
 | 2026-08-13 | Flutter UI/UX | 슈퍼바이저 모드에 기존 세션 재개 기능 추가 — PIN 1218 후 "새 세션 시작" / "기존 세션 재개" 선택. 재개 시 코드 입력 → Firestore 기존 데이터 그대로 로드 (`landing_screen.dart`, `teacher_home_screen.dart`: `existingCode` 파라미터 추가) |
 | 2026-08-13 | AI/백엔드 | `ai_api_client.dart` `_defaultEndpoint` v1 URL → v2 URL 교체 (`https://geminiproxy-xzj4mtcbda-du.a.run.app`) — 리포트 생성·Gemini 그룹화 400 에러 원인 해결 |
@@ -262,12 +263,12 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | 5 | `gemini_api_client.dart` | `http.post`에 `.timeout(Duration(seconds: 10))` 추가 | 교실 Wi-Fi 불안정 시 무한 대기 방지 — 타임아웃 시 폴백 유지 |
 | 6 | `gemini_api_client.dart` | `_stripMarkdown()` 추가 — ` ```json...``` ` 래퍼 전처리 | Gemini가 마크다운 래퍼를 붙일 때 jsonDecode 실패 방지 |
 
-### 현재 AI 그룹화 동작 (코드 기준, 실기기 미검증)
+### 현재 AI 그룹화 동작 (코드 기준, GPT 전환 후 실기기 검증 중)
 
-- 의견 3개 이상 또는 2.5초 경과 시 Gemini 호출 (IdeaChunkBuffer)
+- 의견 3개 이상 또는 2.5초 경과 시 GPT 호출 (IdeaChunkBuffer → openaiProxy)
 - 호출 전까지 Jaccard 폴백(임계값 0.34)으로 즉시 표시
-- 기존 그룹 + 새 배치를 incremental로 Gemini에 전달
-- 세션 주제가 그룹화 프롬프트 첫 줄에 포함됨
+- 기존 그룹 + 새 배치를 incremental로 GPT에 전달
+- 세션 주제 + 교사 최근 지시가 프롬프트 첫 줄에 포함됨
 - 교사 승인 시 엔진 freeze → 이후 새 의견은 그룹 변경 없이 무시
 - 실패 시 조용히 폴백 유지 (교사 화면에 실패 상태 미표시 — 추후 개선 필요)
 
@@ -296,11 +297,11 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 ### 현재 교사 발문 처리 흐름
 
 ```
-교사 발화 → Whisper STT → _latestTranscript
+교사 발화 → gpt-transcribe STT → _latestTranscript
   ├─ Firestore teacher_notes/{id} 저장 (addTeacherNote)
   ├─ _teacherNotes 로컬 리스트에 추가
   └─ groupingEngine.recentTeacherNotes = 최근 2개
-       └─ 다음 Gemini 그룹화 요청 시 프롬프트에 포함
+       └─ 다음 GPT 그룹화 요청 시 프롬프트에 포함 (openaiProxy)
 
 리포트 생성 시
   └─ _teacherNotes(메모리) 또는 Firestore getAllTeacherNotes()로 전체 조회
