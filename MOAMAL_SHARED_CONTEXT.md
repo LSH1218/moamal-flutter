@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-14
-- 갱신한 역할: STT (gpt-transcribe 전환 및 무음 처리 개선)
-- 기준 Flutter 커밋: `e6af392` (feat(stt): gpt-transcribe 모델 전환 및 무음 처리 개선)
+- 마지막 갱신일: 2026-08-18
+- 갱신한 역할: AI 의견구조화 (502 에러 수정, 그룹화 프롬프트 개선, ClusterVoteScreen 동적 업데이트)
+- 기준 Flutter 커밋: `7c12401` (fix: temperature 제거, 그룹화 프롬프트 개선, ClusterVoteScreen 동적 업데이트)
 
 ## 1. 경영 요약
 
@@ -98,7 +98,7 @@
 
 - **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
-- **AI 의견구조화**: openaiProxy 502 에러 원인 파악 및 해결 (GPT 전환 후 첫 실기기 검증); 그룹 승인 화면 빈 카드 원인 추가 확인 (Gemini 시절 미해결 — GPT 전환 후 재검증 필요)
+- **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 (UI 수정 후)
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의)
@@ -107,6 +107,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-18 | AI 의견구조화 | `gpt-5.6-luna` temperature 미지원으로 파라미터 전체 제거 (502→400 에러 원인). `_stableGroupId()` clamp(2,1) 크래시 수정 → clamp(1,1). `ClusterVoteScreen` AI 그룹화 완료 시 동적 반영 (`onGroupUpdate` 콜백 + `cachedGroups` getter). 그룹화 시스템 프롬프트 개선 (수업 주제 맥락 활용, 재배치 허용, 기존 그룹 모두 반환). 디버그 print 3개 제거. BUG_LOG Mercury-Report-03 원인 수정 |
 | 2026-08-15 | AI/백엔드 | `transcribeAudio` 무음 400 → 빈텍스트 정상처리, `openaiProxy` 에러 본문 detail 포함, 재배포 완료 |
 | 2026-08-14 | STT | `transcribeAudio` STT 모델 `whisper-1` → `gpt-transcribe` 전환 (정확도 Average → Highest, 비용 $0.006 → $0.0045/분, 25% 절감). 동일 엔드포인트(`v1/audio/transcriptions`) 유지. 무음/짧은 녹음 시 OpenAI 400 응답 → 빈 텍스트 정상 처리. `whisper_stt_client.dart` 빈 전사 결과 throw 제거 → 빈 문자열 반환. 교사/학생/MicButton 호출부 빈 결과 무시 처리 추가 |
 | 2026-08-13 | Flutter UI/UX | 슈퍼바이저 모드에 기존 세션 재개 기능 추가 — PIN 1218 후 "새 세션 시작" / "기존 세션 재개" 선택. 재개 시 코드 입력 → Firestore 기존 데이터 그대로 로드 (`landing_screen.dart`, `teacher_home_screen.dart`: `existingCode` 파라미터 추가) |
@@ -263,14 +264,28 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | 5 | `gemini_api_client.dart` | `http.post`에 `.timeout(Duration(seconds: 10))` 추가 | 교실 Wi-Fi 불안정 시 무한 대기 방지 — 타임아웃 시 폴백 유지 |
 | 6 | `gemini_api_client.dart` | `_stripMarkdown()` 추가 — ` ```json...``` ` 래퍼 전처리 | Gemini가 마크다운 래퍼를 붙일 때 jsonDecode 실패 방지 |
 
-### 현재 AI 그룹화 동작 (코드 기준, GPT 전환 후 실기기 검증 중)
+### 현재 AI 그룹화 동작 (2026-08-18 기준)
 
 - 의견 3개 이상 또는 2.5초 경과 시 GPT 호출 (IdeaChunkBuffer → openaiProxy)
 - 호출 전까지 Jaccard 폴백(임계값 0.34)으로 즉시 표시
-- 기존 그룹 + 새 배치를 incremental로 GPT에 전달
-- 세션 주제 + 교사 최근 지시가 프롬프트 첫 줄에 포함됨
+- 기존 그룹 + 새 배치를 incremental로 GPT에 전달 (순차 처리 — race condition 수정 완료)
+- 세션 주제 + 교사 최근 지시가 프롬프트 맥락으로 포함됨
 - 교사 승인 시 엔진 freeze → 이후 새 의견은 그룹 변경 없이 무시
 - 실패 시 조용히 폴백 유지 (교사 화면에 실패 상태 미표시 — 추후 개선 필요)
+- `ClusterVoteScreen` 진입 후에도 AI 그룹화 결과 실시간 반영됨 (`onGroupUpdate` 콜백)
+
+### 그룹화 시스템 프롬프트 (2026-08-18 개선)
+
+```
+1. 수업 주제와 교사 지시를 맥락으로 삼아 의견의 의미를 해석하고 그룹화
+2. 의미가 비슷한 의견을 같은 그룹으로 묶기
+3. 각 그룹에 한국어 짧은 제목(2~4단어) 생성
+4. 하나의 의견은 하나의 그룹에만 속함
+5. 새 의견은 기존 그룹에 배정하거나 새 그룹 생성 — 필요하면 기존 그룹 간 의견 재배치 가능
+6. 기존 그룹도 변경 여부와 관계없이 모두 반환
+7. 텍스트가 비어있는 의견은 무시
+8. 반드시 유효한 JSON만 반환
+```
 
 ### 남은 AI 관련 위험
 
@@ -328,7 +343,7 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 - `_buildGroupBody`, `_buildBriefingBody`, `_buildReportBody`만 포맷 의존
 - 교체 시 body builder + `_call()` 내부만 수정, 엔진·화면 코드는 무변경
 
-### 현재 AI 클라이언트 설정 (2026-08-14 기준)
+### 현재 AI 클라이언트 설정 (2026-08-18 기준)
 
 | 항목 | 값 |
 |---|---|
@@ -337,6 +352,7 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | 환경변수 | `AI_PROXY_URL` |
 | 포맷 | OpenAI Chat Completions (`messages`, `response_format: json_object`) |
 | timeout | 30초 |
-| 그룹화 max_tokens | 1024 |
-| 브리핑 max_tokens | 512 |
-| 리포트 max_tokens | 1024 |
+| temperature | **미지원** (gpt-5.6-luna 기본값 1 고정, 파라미터 전송 시 400 에러) |
+| 그룹화 max_completion_tokens | 1024 |
+| 브리핑 max_completion_tokens | 512 |
+| 리포트 max_completion_tokens | 1024 |
