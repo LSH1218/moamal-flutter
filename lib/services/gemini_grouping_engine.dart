@@ -20,6 +20,7 @@ class GeminiGroupingEngine {
   String sessionTitle = '';
   List<String> recentTeacherNotes = [];
   bool _frozen = false;
+  VoidCallback? onGroupUpdate;
 
   // GPT 호출 순차 처리용
   bool _calling = false;
@@ -34,6 +35,8 @@ class GeminiGroupingEngine {
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
+
+  List<Group>? get cachedGroups => _cachedGroups;
 
   List<Group> makeGroups(List<Idea> ideas) {
     if (!_frozen) {
@@ -96,17 +99,11 @@ class GeminiGroupingEngine {
       while (true) {
         // snapshot은 루프 시작 직전 _cachedGroups 기준 — 이전 배치 결과 반영됨
         final snapshot = List<Group>.from(_cachedGroups ?? []);
-        // ignore: avoid_print
-        print('[GeminiGroupingEngine] GPT 호출 batch=${current.map((i) => '${i.id}:${i.text}').toList()}');
         try {
           final result = await _api.groupIdeas(snapshot, current,
               sessionTitle: sessionTitle, teacherNotes: recentTeacherNotes);
-          // ignore: avoid_print
-          print('[GeminiGroupingEngine] GPT 응답: $result');
           _applyResult(result, current, snapshot);
         } catch (e) {
-          // ignore: avoid_print
-          print('[GeminiGroupingEngine] groupIdeas 실패: $e');
           _markProcessed(current);
         }
         if (_pendingBatches.isEmpty) break;
@@ -149,6 +146,7 @@ class GeminiGroupingEngine {
       _cachedGroups = updated;
       _markProcessed(batch);
       onUpdate();
+      onGroupUpdate?.call();
     } catch (_) {
       _markProcessed(batch);
     }
@@ -171,7 +169,7 @@ class GeminiGroupingEngine {
         best = p;
       }
     }
-    final minOverlap = (ideas.length / 2).ceil().clamp(2, ideas.length);
+    final minOverlap = (ideas.length / 2).ceil().clamp(1, ideas.length);
     if (best != null && bestOverlap >= minOverlap) return best.id;
     if (proposed.trim().isNotEmpty) return proposed;
     return ideas.first.id;

@@ -38,13 +38,31 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
   bool _isApproving = false;
   bool _approved = false;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.groupingEngine.onGroupUpdate = () {
+      if (mounted) setState(() {});
+    };
+  }
+
+  @override
+  void dispose() {
+    widget.groupingEngine.onGroupUpdate = null;
+    super.dispose();
+  }
+
+  List<Group> get _currentGroups =>
+      widget.groupingEngine.cachedGroups ?? widget.groups;
+
   Future<void> _approveGroups(SessionState? session) async {
-    if (_isApproving || widget.groups.isEmpty) return;
+    final groups = _currentGroups;
+    if (_isApproving || groups.isEmpty) return;
     setState(() => _isApproving = true);
     try {
       final now = DateTime.now();
       final approvedBy = session?.ownerUid ?? '';
-      final toSave = widget.groups
+      final toSave = groups
           .map((g) => ApprovedGroup(
                 groupId: g.id,
                 title: widget.groupingEngine.makeGroupTitle(g),
@@ -94,14 +112,14 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
               : isCompact
                   ? _CompactBody(
                       session: session,
-                      groups: widget.groups,
+                      groups: _currentGroups,
                       groupingEngine: widget.groupingEngine,
                       counts: counts,
                       totalVotes: totalVotes,
                     )
                   : _MediumBody(
                       session: session,
-                      groups: widget.groups,
+                      groups: _currentGroups,
                       groupingEngine: widget.groupingEngine,
                       counts: counts,
                       totalVotes: totalVotes,
@@ -113,7 +131,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
 
   PreferredSizeWidget _buildAppBar(SessionState? session, bool isCompact) {
     final ideaCount = session?.ideas.length ?? 0;
-    final groupCount = widget.groups.length;
+    final groupCount = _currentGroups.length;
     final voteOpen = session?.voteOpen ?? false;
     final hasApprovedGroups = session?.approvedGroups.isNotEmpty ?? false;
 
@@ -142,7 +160,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
       actions: [
         if (session != null) ...[
           // 그룹 승인 버튼 — 아직 승인하지 않았을 때만 표시
-          if (!hasApprovedGroups && !_approved && widget.groups.isNotEmpty)
+          if (!hasApprovedGroups && !_approved && _currentGroups.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: _isApproving

@@ -90,11 +90,11 @@
 ### [Mercury-Report-03]
 - **현상**: 리포트 생성 실패 `AI 요청 실패 (502)` — openaiProxy 전환 후 발생
 - **재현**: 수업 종료 → "AI 요약 다시 생성" 탭 → 502 에러 스낵바
-- **원인**: OpenAI API에서 `max_tokens` 파라미터 deprecated — 신규 gpt-5.6-luna 모델에서 HTTP 400 반환 → openaiProxy가 502로 래핑해 클라이언트에 전달
-- **해결**: `ai_api_client.dart` 내 `max_tokens` → `max_completion_tokens` 변경 (groupBody 1024, briefingBody 512, reportBody 1024)
+- **원인**: `gpt-5.6-luna`는 `temperature` 파라미터를 기본값(1) 외 지원 안 함 — `temperature: 0.1~0.4` 값 전달 시 OpenAI가 HTTP 400 반환 → openaiProxy가 502로 래핑해 클라이언트에 전달
+- **해결**: `ai_api_client.dart` 내 `temperature` 파라미터 전체 제거 (groupBody, briefingBody, reportBody 모두)
 - **파일**: `lib/services/ai_api_client.dart`
 - **등급**: P1 (리포트 생성 및 GPT 그룹화 전체 불가)
-- **상태**: ✅ 해결 (2026-08-15)
+- **상태**: ✅ 해결 (2026-08-18)
 
 ### [Mercury-3-Group-01]
 - **현상**: 의견 4개 추가 시 Gemini 그룹화 미작동 — 각 의견이 별도 그룹으로 표시됨. 그룹 제목이 "가장·김치찌개가" 등 텍스트 앞 단어 조각으로 나옴 (Jaccard 폴백 상태)
