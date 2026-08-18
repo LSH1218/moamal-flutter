@@ -10,6 +10,7 @@ import '../../widgets/group_card.dart';
 
 class ClusterVoteScreen extends StatefulWidget {
   final String sessionCode;
+  final Stream<SessionState>? sessionStream;
   final List<Group> groups;
   final FirebaseMoamalRepository repo;
   final GeminiGroupingEngine groupingEngine;
@@ -20,6 +21,7 @@ class ClusterVoteScreen extends StatefulWidget {
   const ClusterVoteScreen({
     super.key,
     required this.sessionCode,
+    this.sessionStream,
     required this.groups,
     required this.repo,
     required this.groupingEngine,
@@ -69,7 +71,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<SessionState>(
-      stream: widget.repo.listenToSession(widget.sessionCode),
+      stream: widget.sessionStream ?? widget.repo.listenToSession(widget.sessionCode),
       builder: (context, snapshot) {
         final session = snapshot.data;
         final isCompact = context.isCompact;
@@ -249,6 +251,7 @@ class _CompactBody extends StatelessWidget {
             group: e.value,
             voteCount: counts[e.value.id] ?? 0,
             editable: false,
+            titleOverride: groupingEngine.makeGroupTitle(e.value),
           ),
         ),
         if (totalVotes > 0) ...[
@@ -311,6 +314,7 @@ class _MediumBody extends StatelessWidget {
                     group: e.value,
                     voteCount: counts[e.value.id] ?? 0,
                     editable: false,
+                    titleOverride: groupingEngine.makeGroupTitle(e.value),
                   ),
                 )
                 .toList(),

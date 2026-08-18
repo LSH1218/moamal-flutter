@@ -32,6 +32,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 
   SessionState _session = SessionState.initial();
   List<Group> _groups = [];
+  Stream<SessionState>? _sessionStream;
   String? _aiBriefingFlow;
   MeetingReport? _meetingReport;
   bool _isGeneratingReport = false;
@@ -86,7 +87,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       setState(() => _session = newSession);
     }
 
-    _repo.listenToSession(sessionCode).listen((state) {
+    _sessionStream = _repo.listenToSession(sessionCode);
+    _sessionStream!.listen((state) {
       if (!mounted) return;
       _groupingEngine.sessionTitle = state.title;
       setState(() {
@@ -153,7 +155,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     final newSession =
         SessionState.initial().copyWith(ownerUid: _auth.currentUid);
     await _repo.publishSession(newSession);
-    _repo.listenToSession(newSession.sessionCode).listen((state) {
+    _sessionStream = _repo.listenToSession(newSession.sessionCode);
+    _sessionStream!.listen((state) {
       if (!mounted) return;
       _groupingEngine.sessionTitle = state.title;
       setState(() {
@@ -321,6 +324,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             MaterialPageRoute(
               builder: (_) => ClusterVoteScreen(
                 sessionCode: _session.sessionCode,
+                sessionStream: _sessionStream,
                 groups: _groups,
                 repo: _repo,
                 groupingEngine: _groupingEngine,
@@ -375,7 +379,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
 
   // ── Compact 바디: STT 박스 → Green 요약 패널 ─────────────────────────────
   Widget _buildCompactBody() {
-    final bottomPad = MediaQuery.viewPaddingOf(context).bottom;
     return Column(
       children: [
         if (_session.participants.isNotEmpty) ...[
@@ -421,7 +424,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         Expanded(
           child: Container(
             color: kGreen,
-            padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 76),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 92),
             child: _SummaryPanel(
               groups: _groups,
               groupingEngine: _groupingEngine,
@@ -585,7 +588,7 @@ class _SttBox extends StatelessWidget {
 }
 
 // ── 누적 요약 패널 ────────────────────────────────────────────────────────
-class _SummaryPanel extends StatelessWidget {
+class _SummaryPanel extends StatefulWidget {
   final List<Group> groups;
   final GeminiGroupingEngine groupingEngine;
   final String? aiBriefingFlow;
@@ -601,41 +604,73 @@ class _SummaryPanel extends StatelessWidget {
   });
 
   @override
+  State<_SummaryPanel> createState() => _SummaryPanelState();
+}
+
+class _SummaryPanelState extends State<_SummaryPanel> {
+  final _scrollCtrl = ScrollController();
+
+  @override
+  void didUpdateWidget(_SummaryPanel old) {
+    super.didUpdateWidget(old);
+    if (widget.groups.length != old.groups.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollCtrl.hasClients) {
+          _scrollCtrl.animateTo(
+            _scrollCtrl.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '누적 요약',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: textColor.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (groups.isEmpty)
+    return SingleChildScrollView(
+      controller: _scrollCtrl,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            '의견이 들어오면 자동으로 요약됩니다.',
-            style: TextStyle(fontSize: 14, color: emptyColor),
-          )
-        else
-          ...groups.asMap().entries.map(
-            (e) => _SummaryItem(
-              index: e.key + 1,
-              title: groupingEngine.makeGroupTitle(e.value),
-              summary: e.value.summary,
-              textColor: textColor,
+            '누적 요약',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: widget.textColor.withValues(alpha: 0.6),
             ),
           ),
-        if (aiBriefingFlow != null && groups.isEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            aiBriefingFlow!,
-            style: TextStyle(fontSize: 14, color: textColor),
-          ),
+          const SizedBox(height: 14),
+          if (widget.groups.isEmpty)
+            Text(
+              '의견이 들어오면 자동으로 요약됩니다.',
+              style: TextStyle(fontSize: 14, color: widget.emptyColor),
+            )
+          else
+            ...widget.groups.asMap().entries.map(
+              (e) => _SummaryItem(
+                index: e.key + 1,
+                title: widget.groupingEngine.makeGroupTitle(e.value),
+                summary: e.value.summary,
+                textColor: widget.textColor,
+              ),
+            ),
+          if (widget.aiBriefingFlow != null && widget.groups.isEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              widget.aiBriefingFlow!,
+              style: TextStyle(fontSize: 14, color: widget.textColor),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

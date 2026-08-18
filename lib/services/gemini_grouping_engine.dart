@@ -21,6 +21,10 @@ class GeminiGroupingEngine {
   List<String> recentTeacherNotes = [];
   bool _frozen = false;
 
+  // GPT 호출 순차 처리용
+  bool _calling = false;
+  final _pendingBatches = <List<Idea>>[];
+
   GeminiGroupingEngine({required this.onUpdate}) {
     _buffer = IdeaChunkBuffer(
       minSize: _bufferMinSize,
@@ -37,7 +41,10 @@ class GeminiGroupingEngine {
         if (!_processedIds.contains(idea.id)) _buffer.add(idea);
       }
     }
-    return _cachedGroups ?? _fallback.makeGroups(ideas);
+    if (_cachedGroups != null) return _cachedGroups!;
+    // 빈 텍스트 의견은 Jaccard 폴백에도 포함하지 않음
+    final valid = ideas.where((i) => i.text.trim().isNotEmpty).toList();
+    return _fallback.makeGroups(valid);
   }
 
   void freeze() {
@@ -58,21 +65,55 @@ class GeminiGroupingEngine {
     _buffer.clear();
     _cachedGroups = null;
     _processedIds.clear();
+    _pendingBatches.clear();
+    _calling = false;
     _frozen = false;
     recentTeacherNotes = [];
   }
 
   // ── Internal ─────────────────────────────────────────────────────────────
 
-  Future<void> _callGemini(List<Idea> batch) async {
-    final snapshot = List<Group>.from(_cachedGroups ?? []);
+  Future<void> _callGemini(List<Idea> rawBatch) async {
+    // 빈 텍스트 의견 즉시 처리 완료 표시 (GPT에 보내지 않음)
+    final emptyIdeas = rawBatch.where((i) => i.text.trim().isEmpty).toList();
+    if (emptyIdeas.isNotEmpty) _markProcessed(emptyIdeas);
+
+    final batch = rawBatch.where((i) => i.text.trim().isNotEmpty).toList();
+    if (batch.isEmpty) return;
+
+    // 이미 GPT 호출 중이면 큐에 쌓아두고 완료 후 순차 처리
+    if (_calling) {
+      _pendingBatches.add(batch);
+      return;
+    }
+    await _processQueue(batch);
+  }
+
+  Future<void> _processQueue(List<Idea> first) async {
+    _calling = true;
+    var current = first;
     try {
-      final result = await _api.groupIdeas(snapshot, batch,
-          sessionTitle: sessionTitle, teacherNotes: recentTeacherNotes);
-      _applyResult(result, batch, snapshot);
-    } catch (_) {
-      // 폴백 유지 — 처리된 것으로 표시해 재큐 방지
-      _markProcessed(batch);
+      while (true) {
+        // snapshot은 루프 시작 직전 _cachedGroups 기준 — 이전 배치 결과 반영됨
+        final snapshot = List<Group>.from(_cachedGroups ?? []);
+        // ignore: avoid_print
+        print('[GeminiGroupingEngine] GPT 호출 batch=${current.map((i) => '${i.id}:${i.text}').toList()}');
+        try {
+          final result = await _api.groupIdeas(snapshot, current,
+              sessionTitle: sessionTitle, teacherNotes: recentTeacherNotes);
+          // ignore: avoid_print
+          print('[GeminiGroupingEngine] GPT 응답: $result');
+          _applyResult(result, current, snapshot);
+        } catch (e) {
+          // ignore: avoid_print
+          print('[GeminiGroupingEngine] groupIdeas 실패: $e');
+          _markProcessed(current);
+        }
+        if (_pendingBatches.isEmpty) break;
+        current = _pendingBatches.removeAt(0);
+      }
+    } finally {
+      _calling = false;
     }
   }
 

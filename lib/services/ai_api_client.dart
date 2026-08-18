@@ -72,7 +72,14 @@ class AiApiClient {
 
     if (resp.statusCode == 429) throw Exception('요청이 너무 많습니다. 잠시 후 다시 시도하세요.');
     if (resp.statusCode != 200) {
-      throw Exception('AI 요청 실패 (${resp.statusCode})');
+      String detail = '';
+      try {
+        final err = jsonDecode(resp.body) as Map<String, dynamic>;
+        detail = err['detail'] as String? ?? err['error'] as String? ?? '';
+      } catch (_) {
+        detail = resp.body;
+      }
+      throw Exception('AI 요청 실패 (${resp.statusCode})${detail.isNotEmpty ? ': $detail' : ''}');
     }
 
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -109,8 +116,7 @@ class AiApiClient {
         {'role': 'system', 'content': PromptConfig.groupingSystem()},
         {'role': 'user', 'content': sb.toString()},
       ],
-      'temperature': 0.1,
-      'max_tokens': 1024,
+      'max_completion_tokens': 1024,
       'response_format': {'type': 'json_object'},
     };
   }
@@ -135,8 +141,7 @@ class AiApiClient {
         {'role': 'system', 'content': PromptConfig.briefingSystem()},
         {'role': 'user', 'content': sb.toString()},
       ],
-      'temperature': 0.4,
-      'max_tokens': 512,
+      'max_completion_tokens': 512,
       'response_format': {'type': 'json_object'},
     };
   }
@@ -179,8 +184,7 @@ class AiApiClient {
         {'role': 'system', 'content': PromptConfig.reportSystem()},
         {'role': 'user', 'content': sb.toString()},
       ],
-      'temperature': 0.2,
-      'max_tokens': 1024,
+      'max_completion_tokens': 1024,
       'response_format': {'type': 'json_object'},
     };
   }

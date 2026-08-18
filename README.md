@@ -19,8 +19,9 @@ Flutter 기반 앱. 학생이 제출한 의견을 AI가 실시간으로 클러�
         └── participants/{uid}
 
 [Cloud Functions v2 — asia-northeast3]
-  ├── transcribeAudio  → OpenAI Whisper STT 프록시
-  └── geminiProxy      → Gemini AI 프록시
+  ├── transcribeAudio  → OpenAI gpt-transcribe STT 프록시
+  ├── openaiProxy      → OpenAI GPT 그룹화·리포트 프록시 (현재 사용)
+  └── geminiProxy      → Gemini AI 프록시 (대기)
 
 [Secret Manager]
   ├── OPENAI_API_KEY
@@ -41,14 +42,14 @@ Flutter 기반 앱. 학생이 제출한 의견을 AI가 실시간으로 클러�
 
 | 파일 | 역할 |
 |------|------|
-| `functions/index.js` | Cloud Functions — STT·Gemini 프록시, rate limit |
+| `functions/index.js` | Cloud Functions — STT·GPT·Gemini 프록시, rate limit |
 | `firestore.rules` | Firestore 보안 규칙 |
 | `firebase.json` | Firebase 배포 설정 |
 | `lib/models/participant.dart` | 학생 참가자 모델 |
 | `lib/models/approved_group.dart` | 교사 승인 그룹 모델 |
 | `lib/models/session_state.dart` | 세션 전체 상태 |
 | `lib/repositories/firebase_moamal_repository.dart` | Firestore 읽기/쓰기, 5개 스트림 구독 |
-| `lib/services/gemini_api_client.dart` | Gemini 프록시 호출 (키 없음, Firebase 토큰 사용) |
+| `lib/services/ai_api_client.dart` | GPT/AI 프록시 호출 — 그룹화·리포트·브리핑 (키 없음, Firebase 토큰 사용) |
 | `lib/services/whisper_stt_client.dart` | STT 프록시 호출 (키 없음, Firebase 토큰 사용) |
 | `lib/services/prompt_config.dart` | Firebase Remote Config 기반 AI 프롬프트 관리 |
 
@@ -63,6 +64,13 @@ title:       String
 voteOpen:    bool
 ownerUid:    String   ← 교사 UID
 updatedAt:   Timestamp
+```
+
+### teacher_notes/{noteId}
+```
+text:      String    ← 교사 발화 전사 텍스트
+type:      String    ← "instruction" 등
+createdAt: Timestamp
 ```
 
 ### ideas/{ideaId}
@@ -101,28 +109,29 @@ joinedAt: Timestamp
 ## Cloud Functions
 
 ### transcribeAudio
-- **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/transcribeAudio`
+- **v2 URL**: `https://transcribeaudio-xzj4mtcbda-du.a.run.app`
 - **인증**: `Authorization: Bearer {Firebase ID Token}`
 - **Content-Type**: `audio/mp4` (최대 10MB)
 - **쿼리 파라미터**: `?language=ko&prompt=수업키워드` (prompt 최대 500자, 없으면 생략)
 - **Rate limit**: 분당 10회 (uid 기준)
+- **모델**: `gpt-transcribe` (2026-08-14 교체)
 - **응답**: `{ "text": "..." }`
 
-### geminiProxy
-- **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/geminiProxy`
-- **인증**: `Authorization: Bearer {Firebase ID Token}`
-- **허용 모델**: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
-- **Rate limit**: 분당 20회 (uid 기준)
-- **요청 body**: `{ "model": "gemini-2.5-flash", ...geminiBody }`
-- **응답**: `{ "text": "..." }`
-
-### openaiProxy
-- **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/openaiProxy`
+### openaiProxy ← 현재 AI 그룹화·리포트에 사용
+- **v2 URL**: `https://openaiproxy-xzj4mtcbda-du.a.run.app`
 - **인증**: `Authorization: Bearer {Firebase ID Token}`
 - **허용 모델**: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`
 - **Rate limit**: 분당 20회 (uid 기준)
 - **요청 body**: `{ "model": "gpt-5.6-luna", "messages": [...], "temperature": 0.1, ... }`
 - **응답**: `{ "text": "..." }` (`choices[0].message.content`)
+
+### geminiProxy ← 대기 중 (현재 Flutter 클라이언트 미사용)
+- **v2 URL**: `https://geminiproxy-xzj4mtcbda-du.a.run.app`
+- **인증**: `Authorization: Bearer {Firebase ID Token}`
+- **허용 모델**: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`
+- **Rate limit**: 분당 20회 (uid 기준)
+- **요청 body**: `{ "model": "gemini-2.5-flash", ...geminiBody }`
+- **응답**: `{ "text": "..." }`
 
 ### kakaoVerify
 - **엔드포인트**: `POST https://asia-northeast3-moamal-1e601.cloudfunctions.net/kakaoVerify`
@@ -180,7 +189,7 @@ API 키가 아니라 **프록시 URL 오버라이드**용 (개발 시에만 사�
 ```bash
 flutter run \
   --dart-define=STT_PROXY_URL=http://localhost:5001/moamal-1e601/asia-northeast3/transcribeAudio \
-  --dart-define=GEMINI_PROXY_URL=http://localhost:5001/moamal-1e601/asia-northeast3/geminiProxy
+  --dart-define=AI_PROXY_URL=http://localhost:5001/moamal-1e601/asia-northeast3/openaiProxy
 ```
 
 ---
@@ -234,6 +243,8 @@ multiDexEnabled = true
 
 - Firebase `signInAnonymously()`로 익명 UID 발급 → Firestore 소유권 규칙 충족
 - 4자리 점 표시 + 숫자 키패드 (3×4), 오입력 시 빨간 점으로 표시
+- PIN 확인 후 **"새 세션 시작" / "기존 세션 재개"** 선택 가능 (2026-08-13 추가)
+  - 기존 세션 재개: 코드 입력 → `TeacherHomeScreen(existingCode: code)` — 세션 생성 없이 기존 Firestore 데이터 로드
 - `landing_screen.dart` → `_LandingScreenState._onLogoTap()` / `_PinDialog`
 
 ---
@@ -273,16 +284,17 @@ multiDexEnabled = true
 
 - Gemini / OpenAI API 키는 클라이언트 코드에 포함하지 않음
 - STT는 `functions/transcribeAudio` 프록시만 사용 (Firebase ID Token 인증)
-- Gemini는 `functions/geminiProxy` 프록시만 사용
+- AI 그룹화·리포트는 `functions/openaiProxy` 프록시만 사용 (Firebase ID Token 인증)
 
 ---
 
 ## 남은 작업
 
 - [x] Node.js 22 업그레이드 완료 (2026-08-07)
+- [x] Google Sign-In SHA-1 키 Firebase Console 등록 완료 (2026-08-13)
+- [x] STT gpt-transcribe 엔드투엔드 검증 완료 (2026-08-14)
+- [ ] openaiProxy 502 에러 해결 — GPT 그룹화·리포트 엔드투엔드 검증 (`BUG_LOG.md` Mercury-Report-03)
 - [ ] firebase-functions 최신 버전 업그레이드 (`npm install --save firebase-functions@latest`)
 - [ ] Firebase 개발/운영 환경 분리
-- [ ] Google Sign-In SHA-1 키 Firebase Console 등록 (실제 기기 로그인 테스트 전 필요)
-- [ ] STT / Gemini 함수 키 설정 후 엔드-투-엔드 테스트
 - [ ] 슈퍼바이저 모드 — 출시 전 제거 또는 숨김 처리
 - [ ] 플러터 앱에 카카오/네이버 SDK 연동 (플러터 대화방에서 진행)

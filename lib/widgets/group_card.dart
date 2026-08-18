@@ -16,6 +16,7 @@ class GroupCard extends StatelessWidget {
   final Group group;
   final int voteCount;
   final bool editable;
+  final String? titleOverride;
 
   const GroupCard({
     super.key,
@@ -23,6 +24,7 @@ class GroupCard extends StatelessWidget {
     required this.group,
     required this.voteCount,
     required this.editable,
+    this.titleOverride,
   });
 
   @override
@@ -51,7 +53,7 @@ class GroupCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '${index + 1}. ${group.displayTitle}',
+                    '${index + 1}. ${titleOverride ?? group.displayTitle}',
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
