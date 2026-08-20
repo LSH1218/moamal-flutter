@@ -38,6 +38,7 @@ class FirebaseMoamalRepository implements MoamalRepository {
       'sessionCode': state.sessionCode,
       'title': state.title,
       'voteOpen': state.voteOpen,
+      'sessionType': state.sessionType,
       'updatedAt': FieldValue.serverTimestamp(),
       if (state.ownerUid != null) 'ownerUid': state.ownerUid,
     };
@@ -305,6 +306,7 @@ class FirebaseMoamalRepository implements MoamalRepository {
       title: data?['title'] as String? ?? '',
       voteOpen: data?['voteOpen'] as bool? ?? false,
       ownerUid: data?['ownerUid'] as String?,
+      sessionType: data?['sessionType'] as String? ?? 'class_meeting',
       ideas: ideas,
       votes: votes,
       approvedGroups: approvedGroups,

@@ -12,6 +12,7 @@ class SessionState {
   final Map<String, String> votes; // participantId → groupId
   final List<ApprovedGroup> approvedGroups;
   final List<Participant> participants;
+  final String sessionType;
 
   const SessionState({
     required this.sessionCode,
@@ -22,6 +23,7 @@ class SessionState {
     required this.votes,
     this.approvedGroups = const [],
     this.participants = const [],
+    this.sessionType = 'class_meeting',
   });
 
   factory SessionState.initial() => SessionState(
@@ -41,6 +43,7 @@ class SessionState {
     Map<String, String>? votes,
     List<ApprovedGroup>? approvedGroups,
     List<Participant>? participants,
+    String? sessionType,
   }) {
     return SessionState(
       sessionCode: sessionCode ?? this.sessionCode,
@@ -51,6 +54,7 @@ class SessionState {
       votes: votes ?? this.votes,
       approvedGroups: approvedGroups ?? this.approvedGroups,
       participants: participants ?? this.participants,
+      sessionType: sessionType ?? this.sessionType,
     );
   }
 
