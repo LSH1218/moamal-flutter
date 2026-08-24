@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/approved_group.dart';
 import '../models/idea.dart';
+import '../models/merge_log.dart';
 import '../models/participant.dart';
 import '../models/session_state.dart';
 import 'moamal_repository.dart';
@@ -90,6 +91,14 @@ class FirebaseMoamalRepository implements MoamalRepository {
   }
 
   @override
+  Future<void> deleteApprovedGroup(String sessionCode, String groupId) async {
+    await _sessionRef(sessionCode)
+        .collection('approvedGroups')
+        .doc(groupId)
+        .delete();
+  }
+
+  @override
   Future<void> approveGroups(
       String sessionCode, List<ApprovedGroup> groups) async {
     final ref = _sessionRef(sessionCode).collection('approvedGroups');
@@ -106,6 +115,13 @@ class FirebaseMoamalRepository implements MoamalRepository {
         .collection('participants')
         .doc(participant.uid)
         .set(participant.toFirestore(), SetOptions(merge: true));
+  }
+
+  @override
+  Future<String?> fetchSessionTitle(String sessionCode) async {
+    final snap = await _sessionRef(sessionCode).get();
+    if (!snap.exists) return null;
+    return (snap.data() as Map<String, dynamic>?)?['title'] as String?;
   }
 
   // ── Real-time subscription ─────────────────────────────────────────────────
@@ -203,6 +219,63 @@ class FirebaseMoamalRepository implements MoamalRepository {
         .toList();
   }
 
+  // ── Merge log ─────────────────────────────────────────────────────────────
+
+  @override
+  Future<void> saveMergeLog(String sessionCode, MergeLog log) async {
+    await _sessionRef(sessionCode)
+        .collection('mergeLogs')
+        .doc(log.logId)
+        .set(log.toFirestore());
+  }
+
+  @override
+  Future<void> undoMergeLog(String sessionCode, MergeLog log) async {
+    // resultGroupId를 참조하는 votes 먼저 조회
+    final votesSnap = await _sessionRef(sessionCode)
+        .collection('votes')
+        .where('groupId', isEqualTo: log.resultGroupId)
+        .get();
+
+    final batch = _db.batch();
+
+    // 해당 votes 삭제
+    for (final doc in votesSnap.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // approvedGroups에서 resultGroup 삭제
+    batch.delete(_sessionRef(sessionCode)
+        .collection('approvedGroups')
+        .doc(log.resultGroupId));
+
+    // wasApproved된 sourceGroup 복원
+    for (final sg in log.sourceGroups) {
+      if (!sg.wasApproved) continue;
+      batch.set(
+        _sessionRef(sessionCode).collection('approvedGroups').doc(sg.groupId),
+        {
+          'groupId': sg.groupId,
+          'title': sg.title,
+          'idea_ids': sg.ideaIds,
+          'approvedAt': sg.approvedAt != null
+              ? Timestamp.fromDate(sg.approvedAt!)
+              : FieldValue.serverTimestamp(),
+          'approvedBy': sg.approvedBy ?? '',
+          'revision': sg.revision ?? 1,
+        },
+      );
+    }
+
+    // 로그 undone 처리
+    batch.update(
+      _sessionRef(sessionCode).collection('mergeLogs').doc(log.logId),
+      {'undone': true},
+    );
+
+    await batch.commit();
+  }
+
   // ── Teacher mic control ────────────────────────────────────────────────────
 
   @override
@@ -275,6 +348,7 @@ class FirebaseMoamalRepository implements MoamalRepository {
 
     final ideas = _latestIdeas!.docs
         .map((d) => Idea.fromFirestore(d.id, d.data() as Map<String, dynamic>))
+        .where((idea) => idea.text.trim().isNotEmpty)
         .toList();
 
     final votes = <String, String>{};

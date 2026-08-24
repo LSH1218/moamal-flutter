@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
+import '../models/approved_group.dart';
 import '../models/group.dart';
 import '../models/idea.dart';
+import '../models/merge_log.dart';
 import 'ai_api_client.dart';
 import 'grouping_engine.dart';
 import 'idea_chunk_buffer.dart';
@@ -16,6 +19,7 @@ class GeminiGroupingEngine {
 
   late final IdeaChunkBuffer _buffer;
   List<Group>? _cachedGroups;
+  List<Group>? _mergeSnapshot;
   final _processedIds = <String>{};
   String sessionTitle = '';
   List<String> recentTeacherNotes = [];
@@ -64,9 +68,109 @@ class GeminiGroupingEngine {
   List<String> topKeywords(List<Idea> ideas, int limit) =>
       _fallback.topKeywords(ideas, limit);
 
+  // sourceGroupId 그룹에 targetGroupIds 그룹들의 의견을 모두 합침, 빈 그룹 제거.
+  // 병합 전 상태를 MergeLog로 반환 — 호출자가 Firestore에 저장.
+  MergeLog? mergeGroups(
+    String sourceGroupId,
+    List<String> targetGroupIds,
+    String newTitle, {
+    List<ApprovedGroup> approvedGroups = const [],
+  }) {
+    if (_cachedGroups == null) return null;
+    _mergeSnapshot = List<Group>.from(_cachedGroups!);
+
+    final allSourceIds = {sourceGroupId, ...targetGroupIds};
+    final sourceGroupObjects =
+        _cachedGroups!.where((g) => allSourceIds.contains(g.id)).toList();
+
+    final absorbed = <Idea>[];
+    final kept = <Group>[];
+    for (final g in _cachedGroups!) {
+      if (targetGroupIds.contains(g.id)) {
+        absorbed.addAll(g.ideas);
+      } else {
+        kept.add(g);
+      }
+    }
+    _cachedGroups = kept.map((g) {
+      if (g.id != sourceGroupId) return g;
+      return Group(
+          id: g.id,
+          ideas: List<Idea>.from([...g.ideas, ...absorbed]),
+          aiTitle: newTitle);
+    }).toList();
+    onGroupUpdate?.call();
+
+    final logSources = sourceGroupObjects.map((g) {
+      final approved = approvedGroups.cast<ApprovedGroup?>().firstWhere(
+            (ag) => ag?.groupId == g.id,
+            orElse: () => null,
+          );
+      return MergeLogSourceGroup(
+        groupId: g.id,
+        title: makeGroupTitle(g),
+        ideaIds: g.ideas.map((i) => i.id).toList(),
+        wasApproved: approved != null,
+        approvedAt: approved?.approvedAt,
+        approvedBy: approved?.approvedBy,
+        revision: approved?.revision,
+      );
+    }).toList();
+
+    return MergeLog(
+      logId: 'merge_${DateTime.now().millisecondsSinceEpoch}',
+      mergedAt: DateTime.now(),
+      sourceGroups: logSources,
+      resultGroupId: sourceGroupId,
+      undone: false,
+    );
+  }
+
+  bool get canUndoMerge => _mergeSnapshot != null;
+
+  void undoMerge() {
+    if (_mergeSnapshot == null) return;
+    _cachedGroups = _mergeSnapshot;
+    _mergeSnapshot = null;
+    onGroupUpdate?.call();
+  }
+
+  // ideaFallback: 미분류 의견(어떤 그룹에도 없는)을 이동할 때 넘김
+  void moveIdea(String ideaId, String? targetGroupId, {Idea? ideaFallback}) {
+    Idea? moved;
+    final updated = <Group>[];
+    for (final g in (_cachedGroups ?? [])) {
+      final idx = g.ideas.indexWhere((i) => i.id == ideaId);
+      if (idx >= 0 && moved == null) {
+        moved = g.ideas[idx];
+        final remaining = List<Idea>.from(g.ideas)..removeAt(idx);
+        if (remaining.isNotEmpty) updated.add(g.copyWith(ideas: remaining));
+      } else {
+        updated.add(g);
+      }
+    }
+    moved ??= ideaFallback;
+    if (moved == null) return;
+
+    if (targetGroupId == null) {
+      final newId = 'manual_${DateTime.now().millisecondsSinceEpoch}';
+      updated.add(Group(id: newId, ideas: [moved], aiTitle: null));
+    } else {
+      for (var i = 0; i < updated.length; i++) {
+        if (updated[i].id == targetGroupId) {
+          updated[i] = updated[i].copyWith(ideas: List<Idea>.from([...updated[i].ideas, moved]));
+          break;
+        }
+      }
+    }
+    _cachedGroups = updated;
+    onGroupUpdate?.call();
+  }
+
   void reset() {
     _buffer.clear();
     _cachedGroups = null;
+    _mergeSnapshot = null;
     _processedIds.clear();
     _pendingBatches.clear();
     _calling = false;
@@ -144,6 +248,7 @@ class GeminiGroupingEngine {
       updated.sort((a, b) => b.ideas.length.compareTo(a.ideas.length));
 
       _cachedGroups = updated;
+      _mergeSnapshot = null; // AI 재구성 시 이전 병합 undo 무효화
       _markProcessed(batch);
       onUpdate();
       onGroupUpdate?.call();

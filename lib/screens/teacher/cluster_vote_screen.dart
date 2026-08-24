@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/approved_group.dart';
 import '../../models/group.dart';
+import '../../models/merge_log.dart';
 import '../../models/session_state.dart';
 import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/gemini_grouping_engine.dart';
@@ -37,6 +38,7 @@ class ClusterVoteScreen extends StatefulWidget {
 class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
   bool _isApproving = false;
   bool _approved = false;
+  MergeLog? _lastMergeLog;
 
   @override
   void initState() {
@@ -84,6 +86,64 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
     } finally {
       if (mounted) setState(() => _isApproving = false);
     }
+  }
+
+  Future<void> _doMerge(
+    String sourceId,
+    List<String> targetIds,
+    String newTitle,
+    List<ApprovedGroup> approvedGroups,
+  ) async {
+    final log = widget.groupingEngine
+        .mergeGroups(sourceId, targetIds, newTitle, approvedGroups: approvedGroups);
+    if (log == null) return;
+    try {
+      await widget.repo.saveMergeLog(widget.sessionCode, log);
+      if (mounted) setState(() => _lastMergeLog = log);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('병합 저장 실패: $e')));
+      }
+    }
+  }
+
+  Future<void> _doUndoMerge() async {
+    final log = _lastMergeLog;
+    if (log == null || log.undone) return;
+    try {
+      widget.groupingEngine.undoMerge();
+      await widget.repo.undoMergeLog(widget.sessionCode, log);
+      if (mounted) setState(() => _lastMergeLog = log.copyWith(undone: true));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('되돌리기 실패: $e')));
+      }
+    }
+  }
+
+  void _showMergeSheet(List<ApprovedGroup> approvedGroups) {
+    if (_currentGroups.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('병합하려면 그룹이 2개 이상 필요합니다')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      constraints: sheetConstraints(),
+      builder: (_) => _MergeSheet(
+        groups: _currentGroups,
+        groupingEngine: widget.groupingEngine,
+        onMerge: (sourceId, targetIds, title) =>
+            _doMerge(sourceId, targetIds, title, approvedGroups),
+      ),
+    );
   }
 
   @override
@@ -134,6 +194,9 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
     final groupCount = _currentGroups.length;
     final voteOpen = session?.voteOpen ?? false;
     final hasApprovedGroups = session?.approvedGroups.isNotEmpty ?? false;
+    final canUndo = widget.groupingEngine.canUndoMerge &&
+        _lastMergeLog != null &&
+        !(_lastMergeLog!.undone);
 
     return AppBar(
       backgroundColor: kGround,
@@ -159,6 +222,21 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
       ),
       actions: [
         if (session != null) ...[
+          // 병합 되돌리기
+          if (canUndo)
+            IconButton(
+              icon: const Icon(Icons.undo),
+              tooltip: '병합 되돌리기',
+              onPressed: _doUndoMerge,
+            ),
+          // 그룹 병합
+          if (_currentGroups.length >= 2)
+            IconButton(
+              icon: const Icon(Icons.merge_type),
+              tooltip: '그룹 병합',
+              onPressed: () =>
+                  _showMergeSheet(session.approvedGroups),
+            ),
           // 그룹 승인 버튼 — 아직 승인하지 않았을 때만 표시
           if (!hasApprovedGroups && !_approved && _currentGroups.isNotEmpty)
             Padding(
@@ -265,11 +343,8 @@ class _CompactBody extends StatelessWidget {
       children: [
         ...groups.asMap().entries.map(
           (e) => GroupCard(
-            index: e.key,
             group: e.value,
-            voteCount: counts[e.value.id] ?? 0,
-            editable: false,
-            titleOverride: groupingEngine.makeGroupTitle(e.value),
+            ideaCount: e.value.ideas.length,
           ),
         ),
         if (totalVotes > 0) ...[
@@ -328,11 +403,8 @@ class _MediumBody extends StatelessWidget {
                 .entries
                 .map(
                   (e) => GroupCard(
-                    index: e.key,
                     group: e.value,
-                    voteCount: counts[e.value.id] ?? 0,
-                    editable: false,
-                    titleOverride: groupingEngine.makeGroupTitle(e.value),
+                    ideaCount: e.value.ideas.length,
                   ),
                 )
                 .toList(),
@@ -453,6 +525,184 @@ class _VoteBarChart extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+// ── 그룹 병합 바텀시트 ────────────────────────────────────────────────────
+class _MergeSheet extends StatefulWidget {
+  final List<Group> groups;
+  final GeminiGroupingEngine groupingEngine;
+  final Future<void> Function(String sourceId, List<String> targetIds, String title) onMerge;
+
+  const _MergeSheet({
+    required this.groups,
+    required this.groupingEngine,
+    required this.onMerge,
+  });
+
+  @override
+  State<_MergeSheet> createState() => _MergeSheetState();
+}
+
+class _MergeSheetState extends State<_MergeSheet> {
+  String? _sourceId;
+  final _targetIds = <String>{};
+  late final TextEditingController _titleCtrl;
+  bool _isMerging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _canConfirm =>
+      _sourceId != null && _targetIds.isNotEmpty && _titleCtrl.text.trim().isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('그룹 병합',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('기준 그룹을 하나 선택하고, 흡수될 그룹을 체크하세요.',
+                  style: TextStyle(fontSize: 13, color: Colors.black45)),
+              const SizedBox(height: 16),
+              ...widget.groups.map((g) {
+                final title = widget.groupingEngine.makeGroupTitle(g);
+                final isSource = _sourceId == g.id;
+                final isTarget = _targetIds.contains(g.id);
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => setState(() {
+                    _sourceId = g.id;
+                    _targetIds.remove(g.id);
+                    if (_titleCtrl.text.isEmpty) _titleCtrl.text = title;
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        // 커스텀 라디오 인디케이터
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSource ? kGreen : Colors.black26,
+                              width: isSource ? 2 : 1.5,
+                            ),
+                          ),
+                          child: isSource
+                              ? Center(
+                                  child: Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: const BoxDecoration(
+                                      color: kGreen,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                  style: TextStyle(
+                                      fontWeight: isSource
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: kInk)),
+                              Text('${g.ideas.length}건',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.black38)),
+                            ],
+                          ),
+                        ),
+                        if (_sourceId != null && !isSource)
+                          Checkbox(
+                            value: isTarget,
+                            activeColor: kYellow,
+                            onChanged: (v) => setState(() {
+                              if (v == true) {
+                                _targetIds.add(g.id);
+                              } else {
+                                _targetIds.remove(g.id);
+                              }
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _titleCtrl,
+                decoration: const InputDecoration(
+                  labelText: '병합 후 그룹 제목',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: kGreen),
+                  onPressed: _canConfirm && !_isMerging
+                      ? () async {
+                          setState(() => _isMerging = true);
+                          await widget.onMerge(
+                              _sourceId!, _targetIds.toList(), _titleCtrl.text.trim());
+                          if (context.mounted) Navigator.pop(context);
+                        }
+                      : null,
+                  child: _isMerging
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('병합하기'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
