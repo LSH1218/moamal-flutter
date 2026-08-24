@@ -63,6 +63,11 @@ service cloud.firestore {
         // 쓰기: 교사만
         allow create, update, delete: if isOwner(sessionCode);
       }
+
+      match /mergeLogs/{logId} {
+        // 병합 이력 — 교사만 접근
+        allow read, write: if isOwner(sessionCode);
+      }
     }
 
     // 교사 화이트리스트 — 로그인한 사용자만 본인 문서 읽기 가능, 쓰기는 Admin SDK만
