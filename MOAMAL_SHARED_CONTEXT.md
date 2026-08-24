@@ -4,8 +4,8 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-18
-- 갱신한 역할: AI 의견구조화 (502 에러 수정, 그룹화 프롬프트 개선, ClusterVoteScreen 동적 업데이트)
+- 마지막 갱신일: 2026-08-22
+- 갱신한 역할: Mercury QA v2 (OrganizeScreen 버그 수정 — 그룹 이동, 병합, 승인 취소, 이름 수정 크래시)
 - 기준 Flutter 커밋: `7c12401` (fix: temperature 제거, 그룹화 프롬프트 개선, ClusterVoteScreen 동적 업데이트)
 
 ## 1. 경영 요약
@@ -67,7 +67,7 @@
   - `kakaoVerify`: 카카오 Custom Token 발급
   - `naverVerify`: 네이버 Custom Token 발급
 - **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
-- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, openaiRateLimits, rate limit 컬렉션)
+- **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, mergeLogs, openaiRateLimits, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
 - **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리
@@ -96,7 +96,7 @@
 
 > Mercury QA 발견 버그 상세는 `BUG_LOG.md` 참조.
 
-- **STT**: (P2) 교사 화면 VAD 미구현 (`teacher_home_screen.dart`에 `amplitudeStream` 구독 추가); VAD 임계값(-40 dBFS, 3초) 교실 소음 튜닝; iOS 실기기 STT 검증
+- **STT**: ~~(P2) 교사 화면 VAD 미구현~~ → **해결 2026-08-21** (-34dBFS, 3초, Toggle 모드); VAD 임계값 교실 소음 튜닝(실제 수업 후 조정); iOS 실기기 STT 검증
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
@@ -107,6 +107,9 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-24 | AI/백엔드 | `mergeLogs` 하위 컬렉션 Firestore 보안 규칙 추가 (교사만 읽기/쓰기) → 배포 완료. 병합 이력 저장·되돌리기 Flutter 구현은 플러터 앱 대화방에서 진행 |
+| 2026-08-22 | Mercury QA v2 | `grouping_engine.dart`: `ideas: []` → `<Idea>[]` + `List<Idea>.from()` — `moveIdea()` `List<dynamic>` 런타임 타입 에러 수정(P0, 그룹 전부 사라지는 증상). `gemini_grouping_engine.dart`: `moveIdea()`, `mergeGroups()` 동일 패턴 적용. `organize_screen.dart` `_MergeGroupSheet`: `ConstrainedBox(88%) + SingleChildScrollView` — BOTTOM OVERFLOWED 55px 수정. `_showRenameDialog()`: `ctrl.dispose()` 제거 — 다이얼로그 exit 애니메이션 중 `_dependents.isEmpty` assertion 크래시 수정(P0). `firebase_moamal_repository.dart` + `moamal_repository.dart`: `deleteApprovedGroup()` 추가. `_unapprove()`: `deleteApprovedGroup()` 직접 호출로 변경 — `approveGroups()`는 삭제 없이 set만 해서 승인 취소 미작동(P1) |
+| 2026-08-21 | Mercury QA v2 | `teacher_home_screen.dart`: `_startVAD()/_stopVAD()` 구현, threshold -34dBFS, 3초 침묵 시 자동 `_stopAndTranscribe()` 호출 — Toggle 모드 VAD 미구현 수정(P2). `gemini_grouping_engine.dart` `onGroupUpdate` 콜백 + `_OrganizeScreenState.initState` 연결 — 그룹 이동/병합 후 UI 즉시 반영 |
 | 2026-08-18 | AI 의견구조화 | `gpt-5.6-luna` temperature 미지원으로 파라미터 전체 제거 (502→400 에러 원인). `_stableGroupId()` clamp(2,1) 크래시 수정 → clamp(1,1). `ClusterVoteScreen` AI 그룹화 완료 시 동적 반영 (`onGroupUpdate` 콜백 + `cachedGroups` getter). 그룹화 시스템 프롬프트 개선 (수업 주제 맥락 활용, 재배치 허용, 기존 그룹 모두 반환). 디버그 print 3개 제거. BUG_LOG Mercury-Report-03 원인 수정 |
 | 2026-08-15 | AI/백엔드 | `transcribeAudio` 무음 400 → 빈텍스트 정상처리, `openaiProxy` 에러 본문 detail 포함, 재배포 완료 |
 | 2026-08-14 | STT | `transcribeAudio` STT 모델 `whisper-1` → `gpt-transcribe` 전환 (정확도 Average → Highest, 비용 $0.006 → $0.0045/분, 25% 절감). 동일 엔드포인트(`v1/audio/transcriptions`) 유지. 무음/짧은 녹음 시 OpenAI 400 응답 → 빈 텍스트 정상 처리. `whisper_stt_client.dart` 빈 전사 결과 throw 제거 → 빈 문자열 반환. 교사/학생/MicButton 호출부 빈 결과 무시 처리 추가 |
