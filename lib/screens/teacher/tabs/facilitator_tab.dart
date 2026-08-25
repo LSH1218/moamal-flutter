@@ -5,6 +5,7 @@ import '../../../models/group.dart';
 import '../../../models/meeting_report.dart';
 import '../../../models/session_state.dart';
 import '../../../repositories/firebase_moamal_repository.dart';
+import '../../../services/deep_link_service.dart';
 import '../../../services/gemini_grouping_engine.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/group_card.dart';
@@ -61,7 +62,11 @@ class _CompactLayout extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        StatRow(session: tab.session, groups: tab.groups),
+        StatRow(
+          participantCount: tab.session.participants.length,
+          ideaCount: tab.session.ideas.length,
+          groupCount: tab.groups.length,
+        ),
         const SizedBox(height: 12),
         _SessionPanel(
           session: tab.session,
@@ -133,7 +138,11 @@ class _MediumLayout extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(8, 14, 14, 14),
             children: [
-              StatRow(session: tab.session, groups: tab.groups),
+              StatRow(
+          participantCount: tab.session.participants.length,
+          ideaCount: tab.session.ideas.length,
+          groupCount: tab.groups.length,
+        ),
               const SizedBox(height: 12),
               _VotePanel(
                 session: tab.session,
@@ -229,7 +238,7 @@ class _SessionPanelState extends State<_SessionPanel> {
           const SizedBox(height: 16),
           Center(
             child: QrImageView(
-              data: widget.session.sessionCode,
+              data: DeepLinkService.buildJoinUri(widget.session.sessionCode),
               version: QrVersions.auto,
               size: 140,
             ),
@@ -313,10 +322,8 @@ class _VotePanel extends StatelessWidget {
               return Column(
                 children: [
                   GroupCard(
-                    index: e.key,
                     group: e.value,
-                    voteCount: voteCount,
-                    editable: true,
+                    ideaCount: e.value.ideas.length,
                   ),
                   if (session.votes.isNotEmpty)
                     _VoteBar(

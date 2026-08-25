@@ -49,17 +49,16 @@ class _LandingScreenState extends State<LandingScreen> {
       if (mode == 'resume') {
         final code = await _showCodeInputDialog(context);
         if (!mounted || code == null || code.isEmpty) return;
-        Navigator.pushReplacement(
+        Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                TeacherHomeScreen(existingCode: code.toUpperCase()),
+            builder: (_) => TeacherHomeScreen(existingCode: code.toUpperCase()),
           ),
         );
       } else {
         final title = await _showTitleDialog(context);
         if (!mounted) return;
-        Navigator.pushReplacement(
+        Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => TeacherHomeScreen(initialTitle: title),
@@ -74,18 +73,29 @@ class _LandingScreenState extends State<LandingScreen> {
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: dialogInsetH(ctx),
+          vertical: 24,
+        ),
         title: const Text('세션 선택'),
-        content: const Text('새 수업을 시작하거나 기존 세션 코드로 진입할 수 있어요.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'resume'),
-            child: const Text('기존 세션 재개'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'new'),
-            child: const Text('새 세션 시작'),
-          ),
-        ],
+        // 좁은 폭에서 actions 가로 배치가 넘쳐 라벨이 잘렸다 → 전체 폭 세로 버튼
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('새 수업을 시작하거나 기존 세션 코드로 진입할 수 있어요.'),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, 'new'),
+              child: const Text('새 세션 시작'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx, 'resume'),
+              child: const Text('기존 세션 재개'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -96,6 +106,11 @@ class _LandingScreenState extends State<LandingScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
+        insetPadding: EdgeInsets.symmetric(
+          horizontal: dialogInsetH(ctx),
+          vertical: 24,
+        ),
         title: const Text('세션 코드 입력'),
         content: TextField(
           controller: ctrl,
@@ -118,57 +133,15 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _tapTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isCompact = context.isCompact;
-
-    return Scaffold(
-      backgroundColor: kGround,
-      body: Column(
-        children: [
-          GestureDetector(
-            onTap: _onLogoTap,
-            child: const _GreenHeader(),
-          ),
-          Expanded(
-            child: isCompact
-                ? _CompactBody(
-                    onTeacher: () => _signInAsTeacher(context),
-                    onStudent: () => _joinAsStudent(context),
-                  )
-                : _MediumBody(
-                    onTeacher: () => _signInAsTeacher(context),
-                    onStudent: () => _joinAsStudent(context),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _signInAsTeacher(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SignInScreen()),
-    );
-  }
-
   Future<String?> _showTitleDialog(BuildContext context) {
     final ctrl = TextEditingController();
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         insetPadding: EdgeInsets.symmetric(
-          horizontal: context.isTablet
-              ? MediaQuery.sizeOf(context).width * 0.25
-              : 40.0,
+          horizontal: dialogInsetH(ctx),
           vertical: 24,
         ),
         title: const Text('수업 제목'),
@@ -192,15 +165,406 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
+  void _signInAsTeacher(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
+    );
+  }
+
   void _joinAsStudent(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const JoinScreen()),
     );
   }
+
+  @override
+  void dispose() {
+    _tapTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
+
+    final teacherPanel = _TeacherPanel(
+      onLogoTap: _onLogoTap,
+      onStart: () => _signInAsTeacher(context),
+      isTablet: isTablet,
+    );
+    final studentPanel = _StudentPanel(
+      onCodeEntry: () => _joinAsStudent(context),
+      onQr: () => _joinAsStudent(context),
+      isTablet: isTablet,
+    );
+
+    return Scaffold(
+      body: isTablet
+          ? Row(children: [
+              Expanded(flex: 55, child: teacherPanel),
+              Expanded(flex: 45, child: studentPanel),
+            ])
+          : Column(children: [
+              Expanded(flex: 55, child: teacherPanel),
+              Expanded(flex: 45, child: studentPanel),
+            ]),
+    );
+  }
 }
 
-// ── 슈퍼바이저 PIN 키패드 ─────────────────────────────────────────────────
+// ── 교사 영역 ─────────────────────────────────────────────────────────────
+class _TeacherPanel extends StatelessWidget {
+  final VoidCallback onLogoTap;
+  final VoidCallback onStart;
+  final bool isTablet;
+
+  const _TeacherPanel({
+    required this.onLogoTap,
+    required this.onStart,
+    required this.isTablet,
+  });
+
+  static const _sessions = [
+    _Session('3학년 2반 · 학급회의', '오늘 · 23분 · 학생 28명'),
+    _Session('3학년 2반 · 토론 수업', '오늘 · 41분 · 학생 26명'),
+    _Session('2학년 1반 · 심포지엄', '2일 전 · 38분 · 학생 30명'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final displaySize = isTablet ? 82.0 : 56.0;
+
+    return Container(
+      color: kGreen,
+      child: SafeArea(
+        bottom: false,
+        right: isTablet ? false : true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final showRecent = constraints.maxHeight >= 360;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 로고 행
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: onLogoTap,
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.03 * 22,
+                            ),
+                            children: [
+                              const TextSpan(
+                                text: '모아',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              const TextSpan(
+                                text: '말',
+                                style: TextStyle(color: kYellow),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '수업을 기록하고, 한눈에',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // 중앙 콘텐츠
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '교사',
+                          style: TextStyle(
+                            fontSize: displaySize,
+                            fontWeight: FontWeight.w900,
+                            color: kYellow,
+                            letterSpacing: -0.05 * displaySize,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          '수업을 열고 학생 의견을\n실시간으로 모읍니다',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withValues(alpha: 0.75),
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        GestureDetector(
+                          onTap: onStart,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 15,
+                              horizontal: 24,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kYellow,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.mic, color: kInk, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  '수업 시작',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: kInk,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 최근 수업 가로 스크롤 (높이 360px 이상일 때만 표시)
+                  if (showRecent)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '최근 수업',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 84,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _sessions.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (_, i) => _RecentCard(session: _sessions[i]),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _Session {
+  final String title;
+  final String sub;
+  const _Session(this.title, this.sub);
+}
+
+class _RecentCard extends StatelessWidget {
+  final _Session session;
+  const _RecentCard({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 152,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.09),
+        border: Border.all(
+          color: kYellow.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            session.title,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 3),
+          Expanded(
+            child: Text(
+              session.sub,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+              maxLines: 2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '요약 보기 ↗',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: kYellow,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 학생 영역 ─────────────────────────────────────────────────────────────
+class _StudentPanel extends StatelessWidget {
+  final VoidCallback onCodeEntry;
+  final VoidCallback onQr;
+  final bool isTablet;
+
+  const _StudentPanel({
+    required this.onCodeEntry,
+    required this.onQr,
+    required this.isTablet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displaySize = isTablet ? 72.0 : 52.0;
+    final btnPadding = isTablet ? 22.0 : 18.0;
+
+    return Container(
+      color: kGround,
+      child: SafeArea(
+        top: false,
+        left: isTablet ? false : true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '학생',
+                style: TextStyle(
+                  fontSize: displaySize,
+                  fontWeight: FontWeight.w900,
+                  color: kGreen,
+                  letterSpacing: -0.05 * displaySize,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 14),
+              // 코드 6칸 미리보기
+              Row(
+                children: List.generate(6, (i) {
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(left: i > 0 ? 6 : 0),
+                      child: AspectRatio(
+                        aspectRatio: 1 / 1.15,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: kCardBg,
+                            border: Border.all(
+                              color: kBorderDark,
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 14),
+              // 액션 버튼 행
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: onCodeEntry,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: btnPadding),
+                        decoration: BoxDecoration(
+                          color: kGreen,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          '코드 입력',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: onQr,
+                    child: Container(
+                      width: 66,
+                      height: 66,
+                      decoration: BoxDecoration(
+                        color: kCardBg,
+                        border: Border.all(color: kGreen, width: 1.5),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_scanner,
+                        color: kGreen,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '선생님이 보여준 코드나 QR로 들어가요',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: kInk.withValues(alpha: 0.45),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── 슈퍼바이저 PIN 키패드 (기존 유지) ────────────────────────────────────
 class _PinDialog extends StatefulWidget {
   const _PinDialog();
 
@@ -241,9 +605,7 @@ class _PinDialogState extends State<_PinDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       insetPadding: EdgeInsets.symmetric(
-        horizontal: context.isTablet
-            ? MediaQuery.sizeOf(context).width * 0.3
-            : 40.0,
+        horizontal: dialogInsetH(context, tabletFactor: 0.3),
         vertical: 24,
       ),
       child: Padding(
@@ -295,364 +657,49 @@ class _PinDialogState extends State<_PinDialog> {
       ['7', '8', '9'],
       ['', '0', '⌫'],
     ];
-    return Column(
-      children: rows.map((row) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: row.map((label) {
-            if (label.isEmpty) return const SizedBox(width: 60, height: 50);
-            return GestureDetector(
-              onTap: () => label == '⌫' ? _delete() : _press(label),
-              child: Container(
-                width: 60,
-                height: 50,
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: label == '⌫'
-                      ? Colors.transparent
-                      : Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: label == '⌫' ? 18 : 20,
-                    fontWeight: FontWeight.w500,
-                    color: kInk,
+    const gap = 3.0;
+    return LayoutBuilder(
+      builder: (context, c) {
+        // 고정 60dp는 320dp 기기에서 6dp 초과했다 → 폭에서 역산하고 44dp(터치 최소)까지만 축소
+        final keyW =
+            (c.maxWidth / 3 - gap * 2 - 0.5).clamp(44.0, 60.0).toDouble();
+        final keyH = (keyW * 0.84).clamp(44.0, 50.0).toDouble();
+        return Column(
+          children: rows.map((row) {
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: row.map((label) {
+                if (label.isEmpty) {
+                  return SizedBox(width: keyW + gap * 2, height: keyH);
+                }
+                return GestureDetector(
+                  onTap: () => label == '⌫' ? _delete() : _press(label),
+                  child: Container(
+                    width: keyW,
+                    height: keyH,
+                    margin: const EdgeInsets.all(gap),
+                    decoration: BoxDecoration(
+                      color: label == '⌫'
+                          ? Colors.transparent
+                          : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: label == '⌫' ? 18 : 20,
+                        fontWeight: FontWeight.w500,
+                        color: kInk,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }).toList(),
             );
           }).toList(),
         );
-      }).toList(),
-    );
-  }
-}
-
-// ── Green 헤더 ────────────────────────────────────────────────────────────
-class _GreenHeader extends StatelessWidget {
-  const _GreenHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: kGreen,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RichText(
-                    text: const TextSpan(
-                      style: TextStyle(
-                        fontSize: 38,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                      children: [
-                        TextSpan(
-                            text: '모아', style: TextStyle(color: Colors.white)),
-                        TextSpan(
-                            text: '말', style: TextStyle(color: kYellow)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    '수업을 기록하고, 한눈에',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Compact: 역할 2-col + 최근 수업 세로 ─────────────────────────────────
-class _CompactBody extends StatelessWidget {
-  final VoidCallback onTeacher;
-  final VoidCallback onStudent;
-
-  const _CompactBody({required this.onTeacher, required this.onStudent});
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16, 20, 16, 24 + bottomPad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _RoleCard(
-                  label: '교사',
-                  sub: '수업 시작',
-                  icon: Icons.mic_none,
-                  isPrimary: true,
-                  onTap: onTeacher,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _RoleCard(
-                  label: '학생',
-                  sub: '참여 입장',
-                  icon: Icons.back_hand_outlined,
-                  isPrimary: false,
-                  onTap: onStudent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          const Text(
-            '최근 수업',
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold, color: kInk),
-          ),
-          const SizedBox(height: 10),
-          const _RecentSessionList(),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Medium: 역할 세로(왼쪽) + 최근 수업(오른쪽) ──────────────────────────
-class _MediumBody extends StatelessWidget {
-  final VoidCallback onTeacher;
-  final VoidCallback onStudent;
-
-  const _MediumBody({required this.onTeacher, required this.onStudent});
-
-  @override
-  Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width;
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: w * 0.45,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(28, 28, 16, 28 + bottomPad),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '역할 선택',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black38),
-                ),
-                const SizedBox(height: 14),
-                _RoleCard(
-                  label: '교사로 시작',
-                  sub: '수업 시작 & 요약 관리',
-                  icon: Icons.mic_none,
-                  isPrimary: true,
-                  onTap: onTeacher,
-                ),
-                const SizedBox(height: 12),
-                _RoleCard(
-                  label: '학생으로 참여',
-                  sub: '코드 입력 후 발표·투표',
-                  icon: Icons.back_hand_outlined,
-                  isPrimary: false,
-                  onTap: onStudent,
-                ),
-              ],
-            ),
-          ),
-        ),
-        Container(width: 1, color: const Color(0xFFE0DDD6)),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 28, 24, 28 + bottomPad),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  '최근 수업',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black38),
-                ),
-                SizedBox(height: 14),
-                _RecentSessionList(),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── 역할 카드 ─────────────────────────────────────────────────────────────
-class _RoleCard extends StatelessWidget {
-  final String label;
-  final String sub;
-  final IconData icon;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  const _RoleCard({
-    required this.label,
-    required this.sub,
-    required this.icon,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = isPrimary ? kGreen : Colors.white;
-    final fg = isPrimary ? Colors.white : kInk;
-    final subFg = isPrimary ? Colors.white70 : Colors.black38;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: isPrimary
-              ? null
-              : Border.all(color: const Color(0xFFE0DDD6), width: 1.5),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 32, color: fg),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: fg),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              sub,
-              style: TextStyle(fontSize: 12, color: subFg),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── 최근 수업 목록 ────────────────────────────────────────────────────────
-class _RecentSessionList extends StatelessWidget {
-  const _RecentSessionList();
-
-  static const _items = [
-    _SessionMeta('3학년 2반 · 수학', '오늘 · 23분 · 학생 28명'),
-    _SessionMeta('3학년 2반 · 국어', '오늘 · 41분 · 학생 26명'),
-    _SessionMeta('2학년 1반 · 과학', '2일 전 · 38분 · 학생 30명'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: _items
-          .map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _RecentSessionItem(meta: item),
-              ))
-          .toList(),
-    );
-  }
-}
-
-class _SessionMeta {
-  final String title;
-  final String sub;
-  const _SessionMeta(this.title, this.sub);
-}
-
-class _RecentSessionItem extends StatelessWidget {
-  final _SessionMeta meta;
-
-  const _RecentSessionItem({required this.meta});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE8E4DC)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  meta.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: kInk,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  meta.sub,
-                  style: const TextStyle(fontSize: 12, color: Colors.black38),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: kYellow,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text(
-                  '요약',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: kInk,
-                  ),
-                ),
-                SizedBox(width: 3),
-                Icon(Icons.north_east, size: 12, color: kInk),
-              ],
-            ),
-          ),
-        ],
-      ),
+      },
     );
   }
 }

@@ -4,12 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'repositories/firebase_moamal_repository.dart';
 import 'services/auth_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/prompt_config.dart';
 import 'screens/common/landing_screen.dart';
-import 'screens/student/student_session_screen.dart';
+import 'screens/teacher/teacher_home_screen.dart';
+import 'screens/student/join_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -84,6 +86,12 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
   Future<void> _init() async {
     _deepLinkService = context.read<DeepLinkService>();
 
+    // 앱이 이미 켜진 상태에서 QR을 스캔한 경우.
+    // 아래 분기에서 return되어도 딥링크를 받을 수 있도록 먼저 구독한다.
+    _linkSub = _deepLinkService.codeStream().listen((code) {
+      if (mounted) _joinWithCode(code);
+    });
+
     // 앱이 닫혀 있다가 QR로 열린 경우
     final initialCode = await _deepLinkService.getInitialCode();
     if (initialCode != null && mounted) {
@@ -91,20 +99,49 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
       return;
     }
 
-    // 앱이 이미 켜진 상태에서 QR 스캔한 경우
-    _linkSub = _deepLinkService.codeStream().listen((code) {
-      if (mounted) _joinWithCode(code);
-    });
+    // 교사 세션 복귀: 앱 재시작 시 진행 중이던 수업으로 돌아감
+    final prefs = await SharedPreferences.getInstance();
+    final activeSession = prefs.getString('active_teacher_session');
+    if (activeSession != null && mounted) {
+      final auth = context.read<AuthService>();
+      if (auth.currentUid == null) await auth.signInAnonymously();
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TeacherHomeScreen(existingCode: activeSession),
+        ),
+      );
+    }
   }
 
+  /// 딥링크로 들어온 학생을 코드 직접 입력과 동일한 경로에 태운다.
+  /// 세션 확인 → 이름·번호 입력 → 발표 화면.
+  /// 바로 발표 화면으로 보내면 participants 등록이 빠져
+  /// 교사 화면에 참여자로 잡히지 않는다.
   Future<void> _joinWithCode(String code) async {
     final auth = context.read<AuthService>();
+    final repo = context.read<FirebaseMoamalRepository>();
     await auth.signInAnonymously();
     if (!mounted) return;
-    Navigator.pushReplacement(
+    final title = await repo.fetchSessionTitle(code);
+    if (!mounted) return;
+    if (title == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('세션을 찾을 수 없어요. 코드를 확인해 주세요.'),
+        ),
+      );
+      return;
+    }
+    // pushReplacement를 쓰면 랜딩이 스택에서 빠져 뒤로 가기가 블랙스크린이 된다.
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => StudentSessionScreen(sessionCode: code),
+        builder: (_) => StudentProfileScreen(
+          sessionCode: code,
+          sessionTitle: title,
+        ),
       ),
     );
   }

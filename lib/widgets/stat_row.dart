@@ -1,59 +1,78 @@
 import 'package:flutter/material.dart';
-import '../models/group.dart';
-import '../models/session_state.dart';
 import '../theme/app_theme.dart';
 
+/// 교사 홈 통계 3칸.
+/// 참여/발언 = kCardBg + kGreen 숫자, AI 그룹 = kGreen 면 + kYellow 숫자
 class StatRow extends StatelessWidget {
-  final SessionState session;
-  final List<Group> groups;
+  final int participantCount;
+  final int ideaCount;
+  final int groupCount;
 
-  const StatRow({super.key, required this.session, required this.groups});
+  const StatRow({
+    super.key,
+    required this.participantCount,
+    required this.ideaCount,
+    required this.groupCount,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _Stat(label: '의견', value: session.ideas.length),
+        _StatTile(label: '참여', value: participantCount, isDark: false),
         const SizedBox(width: 8),
-        _Stat(label: '묶음', value: groups.length),
+        _StatTile(label: '발언', value: ideaCount, isDark: false),
         const SizedBox(width: 8),
-        _Stat(label: '투표', value: session.votes.length),
+        _StatTile(label: 'AI 그룹', value: groupCount, isDark: true),
       ],
     );
   }
 }
 
-class _Stat extends StatelessWidget {
+class _StatTile extends StatelessWidget {
   final String label;
   final int value;
+  final bool isDark;
 
-  const _Stat({required this.label, required this.value});
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final bg = isDark ? kGreen : kCardBg;
+    final numColor = isDark ? kYellow : kGreen;
+    final labelColor = isDark ? Colors.white70 : kInk.withValues(alpha: 0.5);
+
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          color: kCardBg,
-          borderRadius: BorderRadius.circular(10),
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           children: [
             Text(
               '$value',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: kGreen,
+                fontWeight: FontWeight.w900,
+                color: numColor,
+                letterSpacing: -0.03 * 22,
+                height: 1,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black45,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: labelColor,
               ),
             ),
           ],

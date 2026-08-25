@@ -66,20 +66,24 @@ class ReportScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: _share,
+              onTap: meetingReport != null ? _share : null,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: kYellow,
+                  color: meetingReport != null
+                      ? kYellow
+                      : kInk.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
+                child: Text(
                   '저장 / 공유',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: kInk,
+                    color: meetingReport != null
+                        ? kInk
+                        : kInk.withValues(alpha: 0.4),
                   ),
                 ),
               ),

@@ -3,6 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../models/group.dart';
 import '../../../models/meeting_report.dart';
 import '../../../models/session_state.dart';
+import '../../../services/deep_link_service.dart';
 import '../../../services/gemini_grouping_engine.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/responsive.dart';
@@ -34,7 +35,11 @@ class DisplayTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        StatRow(session: session, groups: groups),
+        StatRow(
+          participantCount: session.participants.length,
+          ideaCount: session.ideas.length,
+          groupCount: groups.length,
+        ),
         const SizedBox(height: 12),
         _entryPanel(),
         const SizedBox(height: 12),
@@ -65,7 +70,7 @@ class DisplayTab extends StatelessWidget {
             final size =
                 (MediaQuery.sizeOf(context).width * 0.38).clamp(140.0, 220.0);
             return QrImageView(
-              data: session.sessionCode,
+              data: DeepLinkService.buildJoinUri(session.sessionCode),
               version: QrVersions.auto,
               size: size,
             );
@@ -95,10 +100,8 @@ class DisplayTab extends StatelessWidget {
                   .entries
                   .map(
                     (e) => GroupCard(
-                      index: e.key,
                       group: e.value,
-                      voteCount: counts[e.value.id] ?? 0,
-                      editable: false,
+                      ideaCount: e.value.ideas.length,
                     ),
                   )
                   .toList(),

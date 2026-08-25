@@ -31,6 +31,22 @@ class DeepLinkService {
     _sub?.cancel();
   }
 
+  /// 세션 코드 → QR·공유에 쓸 딥링크 문자열.
+  /// QR에 평문 코드만 넣으면 폰 기본 카메라로 찍어도 앱이 열리지 않는다 (Mercury-Share-01).
+  static String buildJoinUri(String code) => 'moamal://join/$code';
+
+  /// QR 스캔 원문 → 세션 코드.
+  /// 딥링크와 평문 6자리를 모두 받는다 — 이전에 배포된 QR도 계속 동작해야 한다.
+  static String? parseScanned(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    final fromUri = _parseCode(Uri.tryParse(text));
+    if (fromUri != null) return fromUri;
+    final plain = text.toUpperCase();
+    if (plain.length == 6) return plain;
+    return null;
+  }
+
   /// moamal://join/XXXXXX → 'XXXXXX' (대문자)
   /// 형식이 맞지 않으면 null.
   static String? _parseCode(Uri? uri) {

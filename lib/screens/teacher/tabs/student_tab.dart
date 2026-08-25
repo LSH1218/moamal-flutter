@@ -77,7 +77,11 @@ class _StudentTabState extends State<StudentTab> {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        StatRow(session: widget.session, groups: widget.groups),
+        StatRow(
+          participantCount: widget.session.participants.length,
+          ideaCount: widget.session.ideas.length,
+          groupCount: widget.groups.length,
+        ),
         const SizedBox(height: 12),
         _Panel(
           title: '발표 기록',
@@ -119,7 +123,7 @@ class _StudentTabState extends State<StudentTab> {
                     child: MicButton(
                       sttClient: _sttClient,
                       prompt: buildWhisperPrompt(widget.session.title),
-                      onResult: (text) {
+                      onResult: (text, _) {
                         final current = _ideaCtrl.text.trim();
                         _ideaCtrl.text =
                             current.isEmpty ? text : '$current\n$text';
@@ -174,10 +178,8 @@ class _StudentTabState extends State<StudentTab> {
                       .entries
                       .map(
                         (e) => GroupCard(
-                          index: e.key,
                           group: e.value,
-                          voteCount: counts[e.value.id] ?? 0,
-                          editable: false,
+                          ideaCount: e.value.ideas.length,
                         ),
                       )
                       .toList(),

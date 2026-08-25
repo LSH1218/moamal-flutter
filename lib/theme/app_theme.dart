@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 
-const kInk = Color(0xFF20231F);
-const kGreen = Color(0xFF225B43);
+// 브랜드 5색
+const kInk    = Color(0xFF20231F);
+const kGreen  = Color(0xFF225B43);
 const kGround = Color(0xFFF3EFE5);
 const kYellow = Color(0xFFF1C84B);
 const kCardBg = Color(0xFFFFFDF8);
+
+// 파생 색 — 상태 표현 전용
+const kRed        = Color(0xFFD32F2F); // 녹음 중·LIVE·종료·에러
+const kBlue       = Color(0xFF2C6BA8); // 전사 중 스피너
+const kDisabled   = Color(0xFFB9B4A8); // 강제 종료된 마이크·비활성
+const kBorder     = Color(0xFFE8E4DC); // 카드 테두리 (연)
+const kBorderMid  = Color(0xFFE0DDD6); // 카드 테두리 (중)
+const kBorderDark = Color(0xFFD8D3C6); // 카드 테두리 (진)
+const kErrorBg    = Color(0xFFFCF0EF); // 코드 입력 에러 배경
 
 ThemeData buildAppTheme() => ThemeData(
       useMaterial3: true,

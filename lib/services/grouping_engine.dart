@@ -23,11 +23,11 @@ class GroupingEngine {
         }
       }
       if (match == null) {
-        match = Group(id: idea.id, ideas: []);
+        match = Group(id: idea.id, ideas: <Idea>[]);
         groups.add(match);
       }
       groups[groups.indexOf(match)] =
-          match.copyWith(ideas: [...match.ideas, idea]);
+          match.copyWith(ideas: List<Idea>.from([...match.ideas, idea]));
     }
     groups.sort((a, b) => b.ideas.length.compareTo(a.ideas.length));
     return groups;
