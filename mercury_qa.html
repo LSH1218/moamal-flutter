@@ -1,0 +1,560 @@
+<title>Mercury QA v2 — Moamal</title>
+<style>
+  :root {
+    --bg:        #F5F7FB;
+    --surface:   #FFFFFF;
+    --border:    #DDE2EE;
+    --border-light: #EEF1F8;
+    --text:      #111827;
+    --text-2:    #5B6580;
+    --text-3:    #8E98B0;
+    --accent:    #3A8EF6;
+    --accent-bg: #EBF3FF;
+    --success:   #22C97A;
+    --success-bg:#E6FAF2;
+    --warn:      #F59E1B;
+    --warn-bg:   #FEF6E4;
+    --danger:    #EF4444;
+    --code-bg:   #1B1E2B;
+    --code-text: #C8D0E7;
+    --code-comment: #5B6A90;
+    --code-key:  #7AB4FF;
+    --code-val:  #7DEFA1;
+    --code-tag:  #F8A259;
+    --progress:  #225B43;
+    --phase-pill-bg: #1B1E2B;
+    --phase-pill: #7AB4FF;
+    --step-num:  #DDE2EE;
+    --step-num-text: #8E98B0;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0D111E;
+      --surface:   #151929;
+      --border:    #222840;
+      --border-light: #1C2135;
+      --text:      #E4E8F5;
+      --text-2:    #8894B4;
+      --text-3:    #4E5875;
+      --accent:    #4DA6FF;
+      --accent-bg: #0E1D35;
+      --success:   #3DD68C;
+      --success-bg:#0B2219;
+      --warn:      #F5A11C;
+      --warn-bg:   #1F160A;
+      --danger:    #F87171;
+      --code-bg:   #080C18;
+      --code-text: #C8D0E7;
+      --code-comment: #3F4D70;
+      --code-key:  #7AB4FF;
+      --code-val:  #7DEFA1;
+      --code-tag:  #F8A259;
+      --progress:  #3DD68C;
+      --phase-pill-bg: #0E1D35;
+      --phase-pill: #4DA6FF;
+      --step-num:  #1C2135;
+      --step-num-text: #4E5875;
+      --shadow: 0 1px 3px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#F5F7FB;--surface:#FFFFFF;--border:#DDE2EE;--border-light:#EEF1F8;--text:#111827;--text-2:#5B6580;--text-3:#8E98B0;--accent:#3A8EF6;--accent-bg:#EBF3FF;--success:#22C97A;--success-bg:#E6FAF2;--warn:#F59E1B;--warn-bg:#FEF6E4;--danger:#EF4444;--code-bg:#1B1E2B;--code-text:#C8D0E7;--code-comment:#5B6A90;--code-key:#7AB4FF;--code-val:#7DEFA1;--code-tag:#F8A259;--progress:#225B43;--phase-pill-bg:#1B1E2B;--phase-pill:#7AB4FF;--step-num:#DDE2EE;--step-num-text:#8E98B0;--shadow:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg:#0D111E;--surface:#151929;--border:#222840;--border-light:#1C2135;--text:#E4E8F5;--text-2:#8894B4;--text-3:#4E5875;--accent:#4DA6FF;--accent-bg:#0E1D35;--success:#3DD68C;--success-bg:#0B2219;--warn:#F5A11C;--warn-bg:#1F160A;--danger:#F87171;--code-bg:#080C18;--code-text:#C8D0E7;--code-comment:#3F4D70;--code-key:#7AB4FF;--code-val:#7DEFA1;--code-tag:#F8A259;--progress:#3DD68C;--phase-pill-bg:#0E1D35;--phase-pill:#4DA6FF;--step-num:#1C2135;--step-num-text:#4E5875;--shadow:0 1px 3px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  code { font-family: 'Cascadia Code','Consolas','Courier New',monospace; font-size: .88em; background: var(--code-bg); color: var(--code-key); padding: 1px 5px; border-radius: 3px; }
+
+  /* ── Progress bar ── */
+  #progress-bar-wrap {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    padding: 10px 24px; display: flex; align-items: center; gap: 14px;
+  }
+  #progress-track { flex:1; height:5px; background:var(--border); border-radius:99px; overflow:hidden; }
+  #progress-fill { height:100%; background:var(--progress); border-radius:99px; transition:width .3s ease; width:0%; }
+  #progress-label { font-size:12px; font-variant-numeric:tabular-nums; color:var(--text-3); white-space:nowrap; min-width:48px; text-align:right; }
+  #theme-toggle { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text-2); cursor:pointer; font-size:14px; padding:2px 8px; }
+  #theme-toggle:hover { background:var(--border-light); }
+
+  /* ── Header ── */
+  .page-header { max-width:760px; margin:0 auto; padding:40px 24px 28px; }
+  .phase-badge { display:inline-flex; align-items:center; gap:6px; background:var(--phase-pill-bg); color:var(--phase-pill); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:3px 10px 3px 8px; border-radius:99px; margin-bottom:16px; }
+  .phase-badge .dot { width:6px; height:6px; border-radius:50%; background:var(--phase-pill); box-shadow:0 0 0 3px color-mix(in srgb,var(--phase-pill) 20%,transparent); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--phase-pill) 20%,transparent)} 50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--phase-pill) 8%,transparent)} }
+  .page-header h1 { font-size:clamp(22px,4vw,30px); font-weight:700; letter-spacing:-.02em; line-height:1.2; color:var(--text); }
+  .page-header .subtitle { margin-top:8px; color:var(--text-2); font-size:14px; }
+  .env-strip { margin-top:20px; display:flex; flex-wrap:wrap; gap:8px; }
+  .env-chip { font-size:12px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:3px 10px; color:var(--text-2); display:flex; align-items:center; gap:5px; }
+  .env-chip .label { color:var(--text-3); }
+
+  /* ── Sections ── */
+  .content { max-width:760px; margin:0 auto; padding:0 24px 80px; }
+  .section { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:16px; box-shadow:var(--shadow); overflow:hidden; }
+  .section-header { display:flex; align-items:center; gap:14px; padding:18px 20px; border-bottom:1px solid var(--border-light); cursor:pointer; user-select:none; }
+  .section-header:hover { background:var(--bg); }
+  .step-num { width:28px; height:28px; border-radius:7px; background:var(--step-num); color:var(--step-num-text); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .section.complete .step-num { background:var(--success-bg); color:var(--success); }
+  .section-title { font-size:15px; font-weight:600; color:var(--text); flex:1; }
+  .section-sub { font-size:12px; color:var(--text-3); margin-top:1px; }
+  .section-count { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .chevron { color:var(--text-3); font-size:12px; transition:transform .2s; }
+  .section.collapsed .chevron { transform:rotate(-90deg); }
+  .section-body { padding:0 20px 16px; }
+  .section.collapsed .section-body { display:none; }
+
+  /* ── Check items ── */
+  .check-group { margin-top:12px; }
+  .check-group + .check-group { margin-top:4px; }
+  .check-item { display:flex; align-items:flex-start; gap:10px; padding:7px 10px; border-radius:7px; cursor:pointer; transition:background .12s; }
+  .check-item:hover { background:var(--bg); }
+  .check-item input[type=checkbox] { appearance:none; -webkit-appearance:none; width:17px; height:17px; border:1.5px solid var(--border); border-radius:4px; flex-shrink:0; margin-top:1px; cursor:pointer; background:var(--bg); transition:all .15s; position:relative; }
+  .check-item input[type=checkbox]:checked { background:var(--success); border-color:var(--success); }
+  .check-item input[type=checkbox]:checked::after { content:''; display:block; width:4px; height:8px; border:2px solid #fff; border-top:none; border-left:none; transform:rotate(45deg); position:absolute; left:4px; top:1px; }
+  .check-label { font-size:14px; color:var(--text); line-height:1.5; flex:1; }
+  .check-item.done .check-label { color:var(--text-3); text-decoration:line-through; }
+  .check-note { font-size:12px; color:var(--text-3); margin-top:2px; display:block; }
+
+  /* ── Notes ── */
+  .warn-note { display:flex; gap:8px; align-items:flex-start; background:var(--warn-bg); border:1px solid color-mix(in srgb,var(--warn) 30%,transparent); border-radius:7px; padding:8px 12px; margin:10px 0; font-size:13px; color:var(--text-2); }
+  .warn-note .icon { color:var(--warn); flex-shrink:0; margin-top:1px; }
+  .info-note { display:flex; gap:8px; align-items:flex-start; background:var(--accent-bg); border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:7px; padding:8px 12px; margin:10px 0; font-size:13px; color:var(--text-2); }
+  .info-note .icon { color:var(--accent); flex-shrink:0; margin-top:1px; }
+  .new-badge { display:inline-block; background:#225B43; color:#fff; font-size:10px; font-weight:700; padding:1px 7px; border-radius:99px; vertical-align:middle; margin-left:6px; letter-spacing:.03em; }
+  .fix-badge { display:inline-block; background:#F59E1B; color:#111; font-size:10px; font-weight:700; padding:1px 7px; border-radius:99px; vertical-align:middle; margin-left:6px; letter-spacing:.03em; }
+  .risk-badge { display:inline-block; background:#EF4444; color:#fff; font-size:10px; font-weight:700; padding:1px 7px; border-radius:99px; vertical-align:middle; margin-left:6px; letter-spacing:.03em; }
+
+  /* ── Logcat blocks ── */
+  .log-block { background:var(--code-bg); border-radius:8px; padding:14px 16px; margin:12px 0; overflow-x:auto; font-family:'Cascadia Code','Consolas','Courier New',monospace; font-size:12.5px; line-height:1.7; }
+  .log-label { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-3); margin-bottom:8px; font-family:-apple-system,system-ui,sans-serif; }
+  .log-line { white-space:pre; display:block; }
+  .log-line .ts { color:var(--code-comment); }
+  .log-line .tag { color:var(--code-tag); }
+  .log-line .ok  { color:var(--code-val); }
+  .log-line .key { color:var(--code-key); }
+  .log-line .plain { color:var(--code-text); }
+  .log-line .cmt  { color:var(--code-comment); }
+
+  /* ── Divider ── */
+  .divider-label { font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-3); padding:20px 0 8px; }
+
+  /* ── Footer ── */
+  .footer { max-width:760px; margin:0 auto; padding:0 24px 40px; color:var(--text-3); font-size:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  @media (max-width:600px) {
+    .page-header { padding:28px 16px 20px; }
+    .content { padding:0 16px 60px; }
+    .footer { padding:0 16px 32px; }
+  }
+</style>
+
+<div id="progress-bar-wrap">
+  <span style="font-size:12px;font-weight:600;color:var(--text-2);white-space:nowrap;">Mercury QA v2</span>
+  <div id="progress-track"><div id="progress-fill"></div></div>
+  <span id="progress-label">0 / 0</span>
+  <button id="theme-toggle" onclick="toggleTheme()">◐</button>
+</div>
+
+<div class="page-header">
+  <div class="phase-badge"><span class="dot"></span>Mercury v2 · UI 재설계 이후</div>
+  <h1>단일 기능 검증 체크리스트 — 재설계 전체 재확인</h1>
+  <p class="subtitle">안드로이드 공기계 1대 · 교사 세션 단독 기능 확인 · 재설계 이전 통과 항목도 회귀 가능하므로 전체 재확인</p>
+  <div class="env-strip">
+    <span class="env-chip"><span class="label">앱</span> Moamal Flutter</span>
+    <span class="env-chip"><span class="label">기기</span> Android 공기계 1대</span>
+    <span class="env-chip"><span class="label">신규</span> OrganizeScreen (원문·승인·투표)</span>
+    <span class="env-chip"><span class="label">수정</span> 학생 뒤로가기 스택 · 종료 다이얼로그 · 배너</span>
+    <span class="env-chip"><span class="label">다음</span> Gemini · Apollo (다중 접속)</span>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ───────────── SECTION 0 — 사전 준비 ───────────── -->
+  <div class="section" id="sec-0">
+    <div class="section-header" onclick="toggleSection('sec-0')">
+      <div class="step-num" style="background:var(--warn-bg);color:var(--warn);">0</div>
+      <div style="flex:1">
+        <div class="section-title">사전 준비 체크 <span style="font-size:11px;font-weight:500;color:var(--warn);margin-left:6px;">QA 시작 전 필수</span></div>
+        <div class="section-sub">환경 세팅 — 이걸 먼저 확인해야 나머지 항목이 의미 있음</div>
+      </div>
+      <span class="section-count" id="cnt-sec-0">0/5</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="warn-note"><span class="icon">⚠</span><span>노트북 → 데스크톱 이전 완료. 이 섹션은 새 환경에서 빌드할 때마다 반드시 재확인하세요.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-0"><span class="check-label">현재 PC debug.keystore SHA-1이 Firebase에 등록됐는지 확인<span class="check-note">PowerShell: <code>keytool -list -v -keystore $env:USERPROFILE\.android\debug.keystore -alias androiddebugkey -storepass android -keypass android</code></span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-0"><span class="check-label">SHA-1 추가 후 <code>google-services.json</code> 재다운로드 → <code>android/app/</code> 덮어쓰기<span class="check-note">SHA-1 등록만 하고 json 교체 안 하면 여전히 ApiException: 10 발생</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-0"><span class="check-label">Firestore <code>whitelisted_teachers/{본인이메일}</code> 문서 존재 확인<span class="check-note">없으면 Firebase 콘솔에서 직접 생성. 문서 ID = 이메일, 필드 없어도 됨</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-0"><span class="check-label">Cloud Functions URL 확인 — <code>transcribeAudio</code> (STT), <code>openaiProxy</code> (GPT)<span class="check-note">v2 함수는 <code>*.a.run.app</code> 형식. <code>whisper_stt_client.dart</code>, <code>ai_api_client.dart</code>의 엔드포인트와 일치 여부 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-0"><span class="check-label">앱 빌드 성공 + 기기 설치 확인 (Gradle JVM 메모리 오류 없이 완료)<span class="check-note">오류 시 <code>gradle.properties</code>에 <code>org.gradle.jvmargs=-Xmx4g</code> 추가</span></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 1 — 로그인 & 세션 생성 ───────────── -->
+  <div class="section" id="sec-1">
+    <div class="section-header" onclick="toggleSection('sec-1')">
+      <div class="step-num">1</div>
+      <div style="flex:1">
+        <div class="section-title">로그인 & 세션 생성</div>
+        <div class="section-sub">교사 Google 로그인 → 세션 생성 → LIVE 화면 진입</div>
+      </div>
+      <span class="section-count" id="cnt-sec-1">0/6</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="info-note"><span class="icon">ℹ</span><span>Android Studio Logcat을 <code>package:mine</code> 필터로 설정한 뒤 시작하세요.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">앱 실행 → 랜딩 화면 표시 (Moamal 로고, 로그인 버튼)<span class="check-note">학생/교사 분기 버튼 또는 Google 로그인 버튼 표시 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">Google 로그인 성공 → 교사 인증 통과 (whitelisted_teachers 확인)<span class="check-note">PendingApprovalScreen으로 빠지지 않고 TeacherHomeScreen 진입 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">세션 생성 후 6자리 코드 화면에 표시 + Firestore <code>sessions/{code}</code> 문서 생성 확인</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">QR 코드 표시 (빔 프로젝터 또는 공유 버튼 경유)<span class="check-note">QR에 딥링크 <code>moamal://join/{sessionCode}</code> 인코딩 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">앱 강제 종료 → 재실행 → 이전 세션 코드로 자동 복귀 (existingCode 흐름)<span class="check-note">TeacherHomeScreen이 existingCode를 받아 새 세션 생성 없이 기존 세션에 연결하는지 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-1"><span class="check-label">앱 백그라운드 전환 후 복귀 시 세션 데이터 유지 (Firestore 리스너 재연결)<span class="check-note">알려진 위험 항목 Common-Network-01. 약 30초 백그라운드 후 의견 추가해서 확인</span></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 2 — 교사 LIVE 화면 ───────────── -->
+  <div class="section" id="sec-2">
+    <div class="section-header" onclick="toggleSection('sec-2')">
+      <div class="step-num">2</div>
+      <div style="flex:1">
+        <div class="section-title">교사 LIVE 화면 — TeacherHomeScreen</div>
+        <div class="section-sub">실시간 의견 목록 · 타이머 · 종료 다이얼로그</div>
+      </div>
+      <span class="section-count" id="cnt-sec-2">0/7</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="info-note"><span class="icon">ℹ</span><span>Firebase 콘솔에서 <code>sessions/{code}/ideas</code> 하위 컬렉션에 문서를 직접 추가하여 의견 입력을 시뮬레이션합니다. 필드: <code>text</code>, <code>speaker</code>, <code>createdAt</code>, <code>sessionCode</code></span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">세션 코드·경과 시간·의견 건수 헤더에 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">Firebase 콘솔에서 의견 추가 → 앱 LIVE 화면에 실시간 반영 (3초 이내)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">빈 텍스트(<code>text: ""</code>) 의견 추가 → 앱에 표시되지 않고 필터링됨<span class="check-note">GPT에도 전송 안 되어야 함 — Logcat에서 빈 의견 skip 로그 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">뒤로 가기 버튼 탭 → 종료 다이얼로그 표시 <span class="fix-badge">재설계</span><span class="check-note">kYellow "!" 배지, "나가면 수업이 종료됩니다" 타이틀, 실시간 의견 건수 표시</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">종료 다이얼로그 바깥 영역 탭 → 닫히지 않음 (<code>barrierDismissible: false</code>) <span class="fix-badge">재설계</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">"수업 계속하기" 버튼 → 다이얼로그 닫히고 세션 유지</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-2"><span class="check-label">"종료" 버튼 → 세션 종료 후 이전 화면 복귀</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 3 — 교사 STT ───────────── -->
+  <div class="section" id="sec-3">
+    <div class="section-header" onclick="toggleSection('sec-3')">
+      <div class="step-num">3</div>
+      <div style="flex:1">
+        <div class="section-title">교사 STT — PTT 및 토글 모드</div>
+        <div class="section-sub">MicControlScreen · Whisper · VAD</div>
+      </div>
+      <span class="section-count" id="cnt-sec-3">0/8</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="log-label">정상 로그 예시 (GPT 그룹화 포함)</div>
+      <div class="log-block">
+        <span class="log-line"><span class="ts">D </span><span class="tag">WhisperSttClient </span><span class="plain">: </span><span class="ok">recording started</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">WhisperSttClient </span><span class="plain">: </span><span class="key">transcript</span><span class="plain">="오늘 수업 주제는 기후 변화입니다"</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="key">GPT 호출 batch=</span><span class="plain">[id1:오늘 수업 주제는 ...]</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="ok">GPT 응답: {groups:[...]}</span></span>
+      </div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">MicControlScreen 진입 → 마이크 권한 요청 (최초 1회)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">PTT 모드: 버튼 누르는 동안 녹음 → 떼면 Whisper 전송 → 텍스트 반환<span class="check-note">녹음 중 kYellow 파동 애니메이션 표시 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">PTT 결과 텍스트가 Draft 시트에 표시 → 전송하면 Firestore ideas에 추가</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">토글 모드: 한 번 탭으로 녹음 시작, 다시 탭으로 종료</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">토글 모드: 3초 침묵 감지 → 자동 녹음 종료<span class="check-note">VAD: <code>_silenceSec = 3</code>, <code>_silenceThresholdDb = -40dB</code></span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">무음 녹음(말 안 함) → Whisper 환각 텍스트 전송 안 됨<span class="check-note">무음 구간에 "감사합니다" 등 hallucination이 Firestore에 추가되면 안 됨</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">교사 노트 텍스트가 GPT 그룹화 프롬프트의 teacherNotes에 포함됨<span class="check-note">Logcat: GPT 호출 직전 teacherNotes 내용 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-3"><span class="check-label">STT 전송 후 TeacherHomeScreen으로 돌아왔을 때 의견 실시간 반영 유지</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 4 — AI 그룹화 ───────────── -->
+  <div class="section" id="sec-4">
+    <div class="section-header" onclick="toggleSection('sec-4')">
+      <div class="step-num">4</div>
+      <div style="flex:1">
+        <div class="section-title">AI 그룹화 — GeminiGroupingEngine</div>
+        <div class="section-sub">IdeaChunkBuffer · GPT 순차 처리 · Jaccard 폴백</div>
+      </div>
+      <span class="section-count" id="cnt-sec-4">0/7</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="warn-note"><span class="icon">⚠</span><span><strong>_stableGroupId 크래시 위험</strong> <span class="risk-badge">미수정</span> — 의견이 단 1개인 그룹이 생기면 <code>clamp(2, 1)</code> → RangeError 크래시 가능. 아직 미수정이므로 1개 의견으로 구성된 그룹이 생기는 시나리오에서 주의 깊게 확인.</span></div>
+      <div class="log-label">정상 로그 예시 — 순차 처리 (race condition 없음)</div>
+      <div class="log-block">
+        <span class="log-line"><span class="cmt">// 배치 1 (3개 의견) 처리 중</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="key">GPT 호출 batch=</span><span class="plain">[id1, id2, id3]</span></span>
+        <span class="log-line"><span class="cmt">// 배치 2가 도착했지만 큐에 대기</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="ok">GPT 응답: {groups:[3개 그룹]}</span></span>
+        <span class="log-line"><span class="cmt">// 배치 1 완료 → 배치 2 시작 (snapshot에 배치 1 결과 포함)</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="key">GPT 호출 batch=</span><span class="plain">[id4]  </span><span class="cmt">← snapshot에 그룹 3개 포함됨</span></span>
+        <span class="log-line"><span class="ts">D </span><span class="tag">GeminiGroupingEngine </span><span class="plain">: </span><span class="ok">GPT 응답: {groups:[3개 유지 or 4개]}</span></span>
+      </div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">의견 3개 추가 → 즉시 GPT 호출 (buffer minSize=3 충족 시 즉시 flush)<span class="check-note">Logcat: "GPT 호출 batch=" 로그에서 3개 의견 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">GPT 응답 후 LIVE 화면 그룹 카드 표시 (Jaccard → AI 그룹으로 전환)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">추가 의견 1개 → 2.5초 후 GPT 호출 (debounce)<span class="check-note">Logcat: 2.5초 후 "GPT 호출 batch=[id4]" 로그 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">두 번째 GPT 호출 시 첫 번째 결과 그룹들이 snapshot에 포함됨 (race condition 없음)<span class="check-note">Logcat에서 두 번째 batch 응답의 groups 수가 첫 번째보다 적으면 race condition 발생한 것</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">OrganizeScreen 진입 후 복귀해도 TeacherHomeScreen의 의견/그룹 실시간 업데이트 유지<span class="check-note">broadcast stream 공유 확인. 복귀 후 Firebase에 의견 추가해서 앱에 반영되는지 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">그룹이 1개이고 의견이 1개일 때 크래시 없음 <span class="risk-badge">위험</span><span class="check-note">_stableGroupId: clamp(2, ideas.length) where ideas.length==1 → RangeError 가능. 재현되면 버그 로그 작성</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-4"><span class="check-label">GPT 오류(네트워크 등) 시 Jaccard 폴백 유지 — 기존 그룹 사라지지 않음</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 5 — OrganizeScreen 진입 & 원문 탭 ───────────── -->
+  <div class="section" id="sec-5">
+    <div class="section-header" onclick="toggleSection('sec-5')">
+      <div class="step-num">5</div>
+      <div style="flex:1">
+        <div class="section-title">OrganizeScreen — 원문 탭 <span class="new-badge">신규</span></div>
+        <div class="section-sub">화면 진입 · 필터 칩 · 그룹 이동 시트</div>
+      </div>
+      <span class="section-count" id="cnt-sec-5">0/9</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="info-note"><span class="icon">ℹ</span><span>OrganizeScreen 진입은 TeacherHomeScreen의 "정리" 버튼 또는 동일한 진입 경로를 통해 합니다. 의견 3개 이상, AI 그룹 1개 이상인 상태에서 진입하세요.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">OrganizeScreen 헤더에 "의견 N건 · 그룹 N개 · 승인 N개" 표시 (실제 값 반영)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">원문 탭이 기본 선택 상태 (탭 바에서 kCardBg 배경 확인)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">미분류 의견이 있을 때 "미분류" 칩에 빨간 dot 표시 + 건수 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">미분류 의견 카드에 kYellow 2px 테두리 강조 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">미분류 필터 칩 탭 → 미분류 의견만 표시, 재탭 → 전체 복귀</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">그룹 필터 칩 탭 → 해당 그룹의 의견만 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">"그룹 이동" 버튼 탭 → _MoveGroupSheet 바텀시트 올라옴<span class="check-note">의견 텍스트 미리보기 카드 + 이동 가능한 그룹 목록 표시 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">그룹 이동 시트: 대상 그룹 선택(kGreen 하이라이트) → "옮기기" 탭 → 카드 즉시 반영<span class="check-note">이동된 의견이 원래 그룹에서 사라지고 대상 그룹 칩에 표시되는지 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-5"><span class="check-label">그룹 이동 시트: "새 그룹" 탭 → 새 그룹 생성 + 해당 의견 이동<span class="check-note">그룹 건수가 1 늘어나야 함. 헤더 카운트도 갱신 확인</span></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 6 — OrganizeScreen 승인 탭 ───────────── -->
+  <div class="section" id="sec-6">
+    <div class="section-header" onclick="toggleSection('sec-6')">
+      <div class="step-num">6</div>
+      <div style="flex:1">
+        <div class="section-title">OrganizeScreen — 승인 탭 <span class="new-badge">신규</span></div>
+        <div class="section-sub">그룹 승인 · 이름 수정 · 병합 시트</div>
+      </div>
+      <span class="section-count" id="cnt-sec-6">0/10</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">승인 탭 전환 → AI 그룹 카드 목록 표시 (각 카드에 "AI 제안" 배지, kYellow)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">"승인하기" 탭 → 로딩 스피너 표시 후 "승인됨" 배지(kGreen)로 변경 + 카드 테두리 kGreen 2px</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">승인 후 Firestore <code>sessions/{code}/approvedGroups</code>에 문서 추가 확인</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">승인된 그룹에서 "이름 수정" 버튼 표시 → 탭 → 다이얼로그 (TextField pre-fill)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">이름 수정 저장 → Firestore approvedGroups title 업데이트 + 승인 탭 즉시 반영</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">승인 취소 → 카드 "AI 제안"으로 복원 (투표 시작 전에만 가능)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">"병합" 칩 탭 → _MergeGroupSheet 바텀시트 (기준 그룹 카드 + 다중 선택 목록)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">병합 시트: 그룹 1개 이상 선택 → "의견 N건이 한 그룹으로 합쳐집니다" 카운트 실시간 갱신</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">병합 실행 → 그룹 수 감소, 의견 수 합산 확인, 병합된 그룹 사라짐</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-6"><span class="check-label">병합 그룹명 TextField 비워두고 병합 → 소스 그룹 원래 이름 유지<span class="check-note">코드: <code>name.isEmpty ? widget.sourceTitle : name</code></span></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 7 — OrganizeScreen 투표 탭 ───────────── -->
+  <div class="section" id="sec-7">
+    <div class="section-header" onclick="toggleSection('sec-7')">
+      <div class="step-num">7</div>
+      <div style="flex:1">
+        <div class="section-title">OrganizeScreen — 투표 탭 <span class="new-badge">신규</span></div>
+        <div class="section-sub">투표 시작 · 실시간 득표 · 투표 닫기</div>
+      </div>
+      <span class="section-count" id="cnt-sec-7">0/8</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="info-note"><span class="icon">ℹ</span><span>학생 투표는 단일 기기 환경에서 Firebase 콘솔로 시뮬레이션합니다. <code>sessions/{code}/votes</code>에 <code>{uid: groupId}</code> 문서를 직접 추가하세요.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">승인 그룹 없을 때 투표 탭 진입 → 빈 상태 카드 표시 + "승인 탭으로" 버튼</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">"승인 탭으로" 버튼 탭 → 승인 탭으로 전환 (스택 교체 아닌 탭 인덱스 변경)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">승인 그룹 있을 때 투표 탭 → 그룹 카드 목록 + "투표 시작" 버튼 (kGreen)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">"투표 시작" → Firestore voteOpen=true + 버튼이 "투표 닫고 결과 확정" (kRed)으로 변경</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">투표 시작 후 Firebase 콘솔에서 votes 추가 → 득표 바 차트 실시간 갱신</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">1위 그룹 카드에 kYellow 테두리 2px 강조 + 바 차트도 kYellow 색상</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">투표 중 승인 탭에서 승인/취소 버튼 비활성화 확인 (<code>canToggle = !session.voteOpen</code>)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-7"><span class="check-label">"투표 닫고 결과 확정" → Firestore voteOpen=false + 안내 문구 사라짐</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 8 — OrganizeScreen 종료 ───────────── -->
+  <div class="section" id="sec-8">
+    <div class="section-header" onclick="toggleSection('sec-8')">
+      <div class="step-num">8</div>
+      <div style="flex:1">
+        <div class="section-title">OrganizeScreen 나가기 & 상태 지속</div>
+        <div class="section-sub">뒤로 가기 · TeacherHomeScreen 복귀 후 동작</div>
+      </div>
+      <span class="section-count" id="cnt-sec-8">0/4</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-8"><span class="check-label">OrganizeScreen 헤더 "←" 버튼 탭 → TeacherHomeScreen으로 복귀</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-8"><span class="check-label">복귀 후 TeacherHomeScreen에서 Firebase 콘솔 의견 추가 → 실시간 반영<span class="check-note">broadcast stream 공유 확인. 복귀 후 스트림이 끊기지 않아야 함</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-8"><span class="check-label">OrganizeScreen에서 그룹 이동/병합 후 복귀 → LIVE 화면 그룹 카드에 변경 반영</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-8"><span class="check-label">OrganizeScreen 진입 → 나가기 → 재진입 반복 3회 — 크래시 또는 상태 오염 없음</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 9 — 학생 흐름 ───────────── -->
+  <div class="section" id="sec-9">
+    <div class="section-header" onclick="toggleSection('sec-9')">
+      <div class="step-num">9</div>
+      <div style="flex:1">
+        <div class="section-title">학생 흐름 (가능한 범위에서)</div>
+        <div class="section-sub">JoinScreen · StudentSessionScreen · 배너</div>
+      </div>
+      <span class="section-count" id="cnt-sec-9">0/7</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="warn-note"><span class="icon">⚠</span><span>학생 흐름은 별도 기기가 필요한 항목이 있습니다. 단일 기기 환경에서는 교사 계정 로그아웃 → 코드 입력 흐름으로 일부 확인 가능. 다중 기기 확보 후 Gemini 단계에서 전체 확인 예정.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">코드 입력 화면 (JoinScreen) — 6자리 입력 후 세션 확인 성공</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">잘못된 코드 입력 → 오류 표시, 앱 크래시 없음</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">이름 입력 → StudentSessionScreen 진입</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">발표 화면에서 뒤로 가기 → 이름 입력 화면 복귀 (블랙스크린 아님) <span class="fix-badge">수정됨</span><span class="check-note">Navigator.push 로 변경됨. 스택: 랜딩→코드입력→이름입력→발표 순서 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">교사 forceStop 발신 → 학생 화면에 kRed 배너 표시 (영구, 탭으로 닫기) <span class="fix-badge">재설계</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">교사 forceStart 발신 → kGreen 배너 표시 + 햅틱 → 3초 후 자동 닫힘 <span class="fix-badge">재설계</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-9"><span class="check-label">투표 시작 후 학생 화면에 승인 그룹 투표 카드 표시 → 선택 가능</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 10 — 보고서 ───────────── -->
+  <div class="section" id="sec-10">
+    <div class="section-header" onclick="toggleSection('sec-10')">
+      <div class="step-num">10</div>
+      <div style="flex:1">
+        <div class="section-title">보고서 생성 및 공유</div>
+        <div class="section-sub">ReportScreen · GPT 요약 · 공유 버튼</div>
+      </div>
+      <span class="section-count" id="cnt-sec-10">0/4</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-10"><span class="check-label">ReportScreen 진입 → 보고서 생성 버튼 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-10"><span class="check-label">보고서 생성 탭 → GPT API 호출 → 수업 요약 텍스트 표시<span class="check-note">Logcat에서 openaiProxy 호출 + 200 응답 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-10"><span class="check-label">보고서 없는 상태에서 공유 버튼 비활성화 또는 안내 표시 <span class="fix-badge">미해결 Mercury-Report-02</span><span class="check-note">현재 보고서가 null일 때 공유 버튼이 활성화된 채로 표시되는 버그 여부 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-10"><span class="check-label">보고서 생성 후 공유 버튼 탭 → 공유 시트 표시</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── SECTION 11 — 회귀 체크 ───────────── -->
+  <div class="section" id="sec-11">
+    <div class="section-header" onclick="toggleSection('sec-11')">
+      <div class="step-num">R</div>
+      <div style="flex:1">
+        <div class="section-title">회귀 체크 — UI 재설계 후 기존 기능 회귀 확인</div>
+        <div class="section-sub">이전 QA에서 통과했으나 재설계로 회귀 가능한 항목</div>
+      </div>
+      <span class="section-count" id="cnt-sec-11">0/6</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">빔 프로젝터 화면 (BeamProjectorScreen) 진입 → 학생용 큰 화면 정상 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">빔 프로젝터 화면에서 투표 바 차트 실시간 갱신 확인</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">슈퍼바이저 PIN 진입 → 핀 입력 후 숨김 메뉴 표시</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">QR 공유 버튼 → 시스템 공유 시트 표시 (딥링크 URL 포함)</span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">디자인 토큰 적용 확인 — 앱 전체에서 Material 기본 파란색(indigo) 잔존 없음<span class="check-note">텍스트 선택 핸들, 스크롤바, 스위치 등 엣지 UI에서 파란색 잔존 여부 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk" data-sec="sec-11"><span class="check-label">다크 모드 시스템 설정 → 앱 UI 전환 (kGround, kCardBg 등 불투명하게 유지)</span></label>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>Mercury QA v2 · 재설계 이후 전체 재확인 · 2026-08</span>
+  <span>다음 단계: Gemini (다중 접속) · Apollo (부하)</span>
+</div>
+
+<script>
+(function() {
+  // ── Theme ──
+  const root = document.documentElement;
+  const stored = localStorage.getItem('mqTheme');
+  if (stored) root.setAttribute('data-theme', stored);
+
+  window.toggleTheme = function() {
+    const cur = root.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('mqTheme', next);
+  };
+
+  // ── Sections collapse/expand ──
+  window.toggleSection = function(id) {
+    const sec = document.getElementById(id);
+    if (sec) sec.classList.toggle('collapsed');
+  };
+
+  // ── Checkbox logic + progress ──
+  const STORAGE_KEY = 'mqv2_checks';
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  const allChk = document.querySelectorAll('.chk');
+
+  allChk.forEach(chk => {
+    const key = chk.closest('.section').id + '_' + Array.from(chk.closest('.section').querySelectorAll('.chk')).indexOf(chk);
+    if (saved[key]) chk.checked = true;
+    if (chk.checked) chk.closest('.check-item').classList.add('done');
+
+    chk.addEventListener('change', function() {
+      const item = this.closest('.check-item');
+      if (this.checked) item.classList.add('done');
+      else item.classList.remove('done');
+      saved[key] = this.checked;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      updateProgress();
+    });
+  });
+
+  function updateProgress() {
+    const total = allChk.length;
+    const done = Array.from(allChk).filter(c => c.checked).length;
+    document.getElementById('progress-fill').style.width = total ? (done / total * 100) + '%' : '0%';
+    document.getElementById('progress-label').textContent = done + ' / ' + total;
+
+    // Per-section counts
+    document.querySelectorAll('.section').forEach(sec => {
+      const id = sec.id;
+      const chks = sec.querySelectorAll('.chk');
+      const secDone = Array.from(chks).filter(c => c.checked).length;
+      const cntEl = document.getElementById('cnt-' + id);
+      if (cntEl) cntEl.textContent = secDone + '/' + chks.length;
+      if (secDone === chks.length && chks.length > 0) sec.classList.add('complete');
+      else sec.classList.remove('complete');
+    });
+  }
+
+  updateProgress();
+})();
+</script>

@@ -4,8 +4,8 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-22
-- 갱신한 역할: Mercury QA v2 (OrganizeScreen 버그 수정 — 그룹 이동, 병합, 승인 취소, 이름 수정 크래시)
+- 마지막 갱신일: 2026-08-25
+- 갱신한 역할: Gemini QA (진입 전 학생측 P1 3건 선수정)
 - 기준 Flutter 커밋: `7c12401` (fix: temperature 제거, 그룹화 프롬프트 개선, ClusterVoteScreen 동적 업데이트)
 
 ## 1. 경영 요약
@@ -97,16 +97,24 @@
 > Mercury QA 발견 버그 상세는 `BUG_LOG.md` 참조.
 
 - **STT**: ~~(P2) 교사 화면 VAD 미구현~~ → **해결 2026-08-21** (-34dBFS, 3초, Toggle 모드); VAD 임계값 교실 소음 튜닝(실제 수업 후 조정); iOS 실기기 STT 검증
+- **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
 - **App 개발**: `flutter analyze` 후 오류 수정; Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 (UI 수정 후)
-- **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의)
+- **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의); **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
+- **Flutter UI/UX (반응형)**: 화면 14개 중 8개만 `utils/responsive.dart` 적용. 미적용: `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`, `facilitator_tab`, `student_tab`. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
 
 ## 9. 최근 변경 기록
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-25 | Gemini QA 선수정 | **Gemini 진입 전 학생측 P1 3건 수정**(실기기 미검증). ① `student_session_screen.dart`: `listenToSession()`을 `build()`→`initState`로 이관, `_sessionStream` 필드 신설 — setState마다 Firestore 5개 구독이 끊겼다 재생성되던 문제(Mercury-3-Student-01). ② QR 딥링크(Mercury-Share-01): `deep_link_service.dart`에 `buildJoinUri()`/`parseScanned()` 추가, QR 생성 6곳을 `moamal://join/{code}`로 교체, **앱 내 스캐너의 `length==6` 판정도 함께 교체**(안 하면 기존 QR 참여가 깨짐). `main.dart` 수신 경로도 수정 — 이름 입력 화면 건너뛰던 것을 `StudentProfileScreen` 경유로, 세션 존재 확인 추가, `pushReplacement`→`push`, `codeStream()` 구독을 분기 앞으로 이동. ③ `_handleForceStart()`: 잠금 해제를 early-return 앞으로 이동 — 발언 완료(`done`) 학생은 교사가 [시작]을 눌러도 마이크가 영구 잠기던 문제(Mercury-3-Student-03, **P2→P1 상향**). `flutter analyze` 신규 오류 0건 |
+| 2026-08-24 | Flutter UI/UX | **Mercury-3-Student-02 · Mercury-Layout-01 코드 수정**(실기기 미검증). `student_session_screen.dart`: forceStop 배너 kInk→kRed, 닫기(×) 추가, 중복 SnackBar 제거, `_forceStopBannerVisible`(배너)와 `_forceStopped`(마이크 잠금) 상태 분리 — 배너 닫기가 교사 강제중지를 무력화하지 않도록. `responsive.dart`: 좁은 폭 하한 신설(`AppBreakpoints.narrow=360`, `isNarrow`, `dialogInsetH()`). `landing_screen.dart`: PIN 패드 고정 60dp→LayoutBuilder 역산(44~60dp), 코드입력·제목 다이얼로그 `scrollable: true`, 세션 선택 다이얼로그 전체 폭 세로 버튼 전환. 신규 발견 Mercury-3-Student-03(P2, forceStart early-return으로 마이크 잠금 미해제 가능) |
+| 2026-08-24 | Mercury QA v2 | **Mercury QA v2 종료.** Section 10(보고서)·R(회귀) 완료. Section 9(학생 흐름)는 2기기 필요로 Gemini 이관(`MERCURY_TO_GEMINI_HANDOFF.md` 신규 작성). 신규 P1 3건: Mercury-Share-01(QR에 딥링크 미인코딩 → 학생이 QR 스캔해도 앱 미실행), Mercury-Session-02(앱 재시작 시 교사 병합·승인 결과 전부 소실), Mercury-Report-06(리포트 생성 버튼 무반응 — `ReportScreen`이 StatelessWidget이라 부모 setState로 리빌드 안 됨). 그 외 P2 4건·P3 3건. 리포트 화면 설계 미확정 4건과 반응형·iOS 범위는 QA 밖 결정 사항으로 분리 |
+| 2026-08-24 | Mercury QA v2 | Section 8(OrganizeScreen 나가기 & 상태 지속) 전체 통과 — ← 복귀, 복귀 후 broadcast stream 실시간 반영(발언 7→8), 이동/병합 결과 유지, 진입↔복귀 3회 반복 크래시·상태 오염 없음. 테스트 중 승인 그룹 1건("접근성 높은 불고기") 소실을 발견해 원인 규명 — 코드 자동 삭제 경로 없음(`deleteApprovedGroup`은 `_unapprove` 단일 호출), 그룹 id 불일치라면 고아 문서가 남아야 하나 Firestore엔 `group1` 하나뿐 → 실제 탭으로 확인. **Mercury-4-Organize-01 P2 → P1 상향**: 투표 중 무반응에 따른 재탭 습관이 투표 종료 후 실삭제로 이어지고 교사 수정 그룹명까지 함께 소실. 승인 취소 확인 다이얼로그 필요 |
+| 2026-08-24 | Mercury QA v2 | Section 6 완료 (6-8 병합 카운트 실시간 갱신 ✅, 6-10 빈 이름 병합 시 소스 이름 유지 ✅). Section 7 전체 완료 (투표 탭 승인 0개 빈 상태, 투표 시작/닫기, 실시간 득표 바 kYellow 강조, 투표 중 승인 비활성 재확인). `gemini_grouping_engine.dart`: `_mergeSnapshot` 필드 추가, `mergeGroups()` 호출 전 스냅샷 저장, `undoMerge()` 추가 — 병합 직후 5초 SnackBar "되돌리기" 기능 구현. `organize_screen.dart` `_doMerge()`: `ScaffoldMessenger`로 되돌리기 SnackBar 표시. 병합 시트 안내 문구 "병합은 승인 전까지 되돌릴 수 있어요" → "병합 직후 되돌리기 가능"으로 수정 |
+| 2026-08-24 | Mercury QA v2 | `report_screen.dart`: `meetingReport == null`일 때 공유 버튼 비활성화 — `onTap: null`, 배경 반투명, 텍스트 반투명 처리 (Mercury-Report-02 해결) |
 | 2026-08-24 | AI/백엔드 | `mergeLogs` 하위 컬렉션 Firestore 보안 규칙 추가 (교사만 읽기/쓰기) → 배포 완료. 병합 이력 저장·되돌리기 Flutter 구현은 플러터 앱 대화방에서 진행 |
 | 2026-08-22 | Mercury QA v2 | `grouping_engine.dart`: `ideas: []` → `<Idea>[]` + `List<Idea>.from()` — `moveIdea()` `List<dynamic>` 런타임 타입 에러 수정(P0, 그룹 전부 사라지는 증상). `gemini_grouping_engine.dart`: `moveIdea()`, `mergeGroups()` 동일 패턴 적용. `organize_screen.dart` `_MergeGroupSheet`: `ConstrainedBox(88%) + SingleChildScrollView` — BOTTOM OVERFLOWED 55px 수정. `_showRenameDialog()`: `ctrl.dispose()` 제거 — 다이얼로그 exit 애니메이션 중 `_dependents.isEmpty` assertion 크래시 수정(P0). `firebase_moamal_repository.dart` + `moamal_repository.dart`: `deleteApprovedGroup()` 추가. `_unapprove()`: `deleteApprovedGroup()` 직접 호출로 변경 — `approveGroups()`는 삭제 없이 set만 해서 승인 취소 미작동(P1) |
 | 2026-08-21 | Mercury QA v2 | `teacher_home_screen.dart`: `_startVAD()/_stopVAD()` 구현, threshold -34dBFS, 3초 침묵 시 자동 `_stopAndTranscribe()` 호출 — Toggle 모드 VAD 미구현 수정(P2). `gemini_grouping_engine.dart` `onGroupUpdate` 콜백 + `_OrganizeScreenState.initState` 연결 — 그룹 이동/병합 후 UI 즉시 반영 |
