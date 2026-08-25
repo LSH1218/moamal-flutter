@@ -70,7 +70,7 @@
 - **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, mergeLogs, openaiRateLimits, rate limit 컬렉션)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
-- **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리
+- **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리, **웹 랜딩 페이지**(QR 딥링크가 `moamal://`라 앱 미설치 기기는 미대응 — Mercury-Share-01 잔여)
 
 ## 6. 주요 위험
 
@@ -94,14 +94,24 @@
 
 ## 8. 대화방별 다음 행동
 
-> Mercury QA 발견 버그 상세는 `BUG_LOG.md` 참조.
+> 버그 상세는 `BUG_LOG_v2.md` 참조 (재설계 이후 기준). v1은 `BUG_LOG.md`.
 
 - **STT**: ~~(P2) 교사 화면 VAD 미구현~~ → **해결 2026-08-21** (-34dBFS, 3초, Toggle 모드); VAD 임계값 교실 소음 튜닝(실제 수업 후 조정); iOS 실기기 STT 검증
-- **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
-- **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI; 학생 입장 이름 입력 화면
+- **Gemini QA (현재 단계)**: 2기기 구성 — **공기계 = 학생 / 에뮬레이터 = 교사** (1라운드). 2라운드에서 역할 스왑.
+  진입 전 학생측 P1 3건 선수정 완료(2026-08-25, 커밋 `87569ce`) — 전부 **실기기 미검증**이라 G1~G3에서 우선 확인:
+  Mercury-Share-01(QR 딥링크·스캐너·수신 경로) → G1, Mercury-3-Student-01(스트림 재구독) → G2, Mercury-3-Student-03(forceStart 잠금) → G3.
+  섹션 구성: G1 학생 진입 · G2 학생 발화→교사 반영 · G3 마이크 원격 제어 · G4 승인→실투표 · G5 다중 학생 ·
+  G6 네트워크·생명주기(Common-Network-01) · G7 역할 스왑 · G8 폭 매트릭스 · GR 회귀
+- **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
+- **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
-- **App 개발**: `flutter analyze` 후 오류 수정; Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 (UI 수정 후)
+- **App 개발**: ~~`flutter analyze` 후 오류 수정~~ → 2026-08-25 실행, **오류 0건**(경고·info 11건: 미사용 선언 4, 스타일 7);
+  Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 → Gemini G6;
+  **미해결 P1** — Mercury-Report-06(리포트 화면 미갱신), Mercury-Session-02(재시작 시 병합·승인 결과 소실), Mercury-4-Organize-01(승인 취소 확인 다이얼로그).
+  Gemini 중에는 우회 가능하나 Apollo 전 수정 필요.
+  **잠재 재발 지점**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의 `?? repo.listenToSession(...)` 폴백 —
+  현재 호출부가 항상 `sessionStream`을 넘겨 미발현이나, 넘기지 않는 호출부가 생기면 Mercury-3-Student-01이 재발
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의); **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
 - **Flutter UI/UX (반응형)**: 화면 14개 중 8개만 `utils/responsive.dart` 적용. 미적용: `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`, `facilitator_tab`, `student_tab`. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
 
