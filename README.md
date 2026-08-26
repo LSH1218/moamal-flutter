@@ -51,6 +51,7 @@ Flutter 기반 앱. 학생이 제출한 의견을 AI가 실시간으로 클러�
 | `lib/repositories/firebase_moamal_repository.dart` | Firestore 읽기/쓰기, 5개 스트림 구독 |
 | `lib/services/ai_api_client.dart` | GPT/AI 프록시 호출 — 그룹화·리포트·브리핑 (키 없음, Firebase 토큰 사용) |
 | `lib/services/whisper_stt_client.dart` | STT 프록시 호출 (키 없음, Firebase 토큰 사용) |
+| `lib/services/deep_link_service.dart` | `moamal://join/{code}` 생성·파싱 — QR 인코딩과 스캔 판독의 단일 진입점 |
 | `lib/services/prompt_config.dart` | Firebase Remote Config 기반 AI 프롬프트 관리 |
 
 ---
@@ -256,7 +257,9 @@ multiDexEnabled = true
 
 - 코드 직접 입력 (`TextField` 6자리) 또는 **"QR 코드로 참여"** 버튼
 - QR 스캔: `mobile_scanner` 패키지, `QrScanScreen` (전체화면 카메라 + 안내 프레임)
-- 스캔 성공 시 6자리 코드 추출 → 자동으로 `_join()` 호출
+- 스캔 성공 시 `DeepLinkService.parseScanned()`로 세션 코드 추출 → 자동 참여
+  - **딥링크(`moamal://join/XXXXXX`)와 평문 6자리를 모두 허용** — 이전에 배포된 QR 호환 유지
+  - QR 생성부를 딥링크로 바꿀 때 이 판독부를 함께 수정하지 않으면 앱 내 QR 참여가 깨진다
 
 ---
 
@@ -269,6 +272,10 @@ multiDexEnabled = true
   - **"전체 화면으로 보기"** 버튼 → `_QrFullScreen`
 - `_QrFullScreen`: 흰 배경 + QR 260px + 코드 48px (학교 태블릿 공유용)
 - `qr_flutter` 패키지 사용
+- **QR 페이로드는 `DeepLinkService.buildJoinUri(code)` = `moamal://join/{code}`** (2026-08-25 변경)
+  - 폰 기본 카메라로 찍으면 앱이 열린다 (`AndroidManifest.xml` intent-filter `scheme=moamal, host=join`)
+  - QR 생성 지점은 6곳 — `_QrSheet`, `_QrFullScreen`, `beam_projector_screen`(2), `display_tab`, `facilitator_tab`
+  - ⚠ **앱 미설치 기기는 `moamal://`로 열 수 없다.** 웹 럜딩 URL 도입은 미결정
 
 ---
 
@@ -294,7 +301,10 @@ multiDexEnabled = true
 - [x] Node.js 22 업그레이드 완료 (2026-08-07)
 - [x] Google Sign-In SHA-1 키 Firebase Console 등록 완료 (2026-08-13)
 - [x] STT gpt-transcribe 엔드투엔드 검증 완료 (2026-08-14)
-- [ ] openaiProxy 502 에러 해결 — GPT 그룹화·리포트 엔드투엔드 검증 (`BUG_LOG.md` Mercury-Report-03)
+- [x] openaiProxy 502 에러 해결 완료 (2026-08-18) — `gpt-5.6-luna`가 temperature를 미지원해 파라미터 전체 제거
+- [ ] **웹 럜딩 페이지** — QR 딥링크가 `moamal://`라 앱 미설치 기기 미대응 (`BUG_LOG_v2.md` Mercury-Share-01)
+- [ ] **교사·학생 수동 텍스트 입력 복원 여부** — 재설계로 `student_tab`이 끊기면서 현재 `ideas` 생성 경로가 STT 단일 (`BUG_LOG_v2.md` Mercury-Redesign-01)
+- [ ] 사재 코드 정리 — `tabs/` 3개 파일 1,129줄 미참조
 - [ ] firebase-functions 최신 버전 업그레이드 (`npm install --save firebase-functions@latest`)
 - [ ] Firebase 개발/운영 환경 분리
 - [ ] 슈퍼바이저 모드 — 출시 전 제거 또는 숨김 처리
