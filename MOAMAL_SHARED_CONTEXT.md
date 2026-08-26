@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-26
-- 갱신한 역할: 백엔드/Firebase (세션 라이프사이클 스키마 규칙 검증 · 규칙 배포 시점 확정) → Flutter 앱개발 (세션 라이프사이클 4건 일괄 구현)
-- 기준 Flutter 커밋: `2353c77` (docs: 체크리스트 G1에 실제 수행 항목 반영) + **세션 라이프사이클·권한 변경분 미커밋**
+- 마지막 갱신일: 2026-08-27
+- 갱신한 역할: Flutter 앱개발 (Common-Auth-01 — 익명 로그인 교사 세션 재사용 수정)
+- 기준 Flutter 커밋: `bd6c3cf` (feat: 리포트 화면에 실제 수업 종료 버튼 구현) + **Common-Auth-01 변경분 미커밋**
 
 ## 1. 경영 요약
 
@@ -86,7 +86,7 @@
 | ~~학생이 다른 의견을 수정 가능~~ | ~~높음~~ | **코드 수정 완료 2026-08-26 · 배포 전** — `submitIdea()`가 `authorUid` 기록, 규칙이 작성자 검증 (`Common-Rules-01`). Gemini S-7에서 실검증, Apollo 진입 차단 조건 유지 | 새 빌드 설치 → 규칙 배포 순서 준수 (§15) |
 | 투표 종료 후에도 학생 vote 쓰기 가능 | 중간 | `votes` 규칙에 `voteOpen` 조건 없음 (`Common-Rules-02`). 오프라인 큐 쓰기가 확정 결과를 바꿀 수 있음 | 규칙안 준비됨 — Gemini QA 후 적용 (§15) |
 | ~~`sessions` 컬렉션 전체 목록 조회 가능~~ | ~~중간~~ | **코드 수정 완료 2026-08-26 · 배포 전** — `allow get` / `allow list: if false` 분리 (`Common-Rules-03`) | Common-Rules-01과 같은 배포에 묶음 (§15) |
-| 학생이 교사 UID로 입장 가능 | 중간 | `signInAnonymously()`가 기존 로그인 세션을 재사용 (`Common-Auth-01`). 권한 오류 없이 잘못된 데이터가 쌓임 | QA는 앱 데이터 삭제로 회피, 근본 수정은 앱개발 방 |
+| ~~학생이 교사 UID로 입장 가능~~ | ~~중간~~ | **코드 수정 완료 2026-08-27 · 실기기 미검증** — `signInAnonymously()`가 기존 로그인이 익명이 아니면 로그아웃 후 재발급하도록 변경 (`Common-Auth-01`) | 실기기 검증 전까지 QA는 앱 데이터 삭제 회피책 병행 |
 
 ## 7. 현재 우선순위
 
@@ -119,6 +119,7 @@
 - **App 개발 (2026-08-26 완료)**: ~~학생 퇴장 처리(`Gemini-1-Exit-01`)~~ · ~~세션 종료 상태(`Gemini-1-Exit-03`)~~ · ~~그룹 구성 소실(`Mercury-Session-02`)~~ · ~~경과 시간 리셋(`Mercury-Session-03`)~~ · ~~리포트 화면 미갱신(`Mercury-Report-06`)~~ → **전부 코드 수정 완료 · 실기기 미검증**. 스키마는 §16. 예상대로 **보안 규칙 변경 없음**(세션 라이프사이클 한정 — 같은 날 백엔드 방의 `ideas`/`votes` 규칙 변경은 별건). 다음 Gemini 라운드 우선 검증 4가지: ① 학생 나가기 → 교사 `참여` 1→0 ② 교사 종료 → 학생 마이크 잠금·안내·랜딩 복귀 ③ 교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지(**신규 세션으로 테스트** — 구 세션은 `createdAt`/`groupSnapshot`이 없다) ④ 리포트 `AI 요약 생성` 즉시 반영. **주의(해소됨)**: 세션 종료 경로가 뒤로가기와 하단 독 두 갈래였던 문제 — 하단 독 라벨·동작 불일치는 **2026-08-26 UI/UX 방이 해결**(`종료`→`수업기록`, kRed 제거, `teacher_dock.dart`), 리포트 화면의 실제 종료 버튼은 **같은 날 앱개발 방이 구현 완료**(아래 항목 참조). 이제 정상 종료는 리포트 화면의 `[수업 끝내기]` 하나로 모인다
 - **App 개발**: ~~`flutter analyze` 후 오류 수정~~ → 2026-08-25 실행, **오류 0건**(경고·info 11건: 미사용 선언 4, 스타일 7);
   Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 → Gemini G6;
+- **App 개발 (완료 2026-08-27)**: `Common-Auth-01` 수정 — `signInAnonymously()`가 기존 로그인이 익명이 아니면(교사 계정 등) `FirebaseAuth.signOut()` 후 새 익명 세션을 발급. 교사 기기를 학생 기기로 재사용해도 학생이 교사 권한으로 입장하지 않는다. 구글/카카오/네이버 SDK까지 끊는 전체 로그아웃은 쓰지 않음(학생 입장 지연 방지). **의도적으로 미해결로 남긴 것**: 같은 기기를 여러 학생이 번갈아 쓰는 교실 공용 태블릿 로테이션 — 첫 학생의 익명 세션이 재사용되므로 오늘 수정 범위 밖. `flutter analyze` 오류 0, `flutter test` 23건 통과. **코드 수정 완료 · 실기기 미검증**, 검증 전까지 회피책(학생 기기 앱 데이터 삭제) 유지 권장
 - **App 개발 (완료 2026-08-26)**: 리포트 화면 **실제 수업 종료 버튼** 구현 완료 (UI/UX 방 인계분).
   확정 흐름: `수업 중 → [수업기록](하단 독, 이동만·기존) → 리포트 작성·공유 → [수업 끝내기](신규) → 랜딩`.
   `report_screen.dart`에 `_EndSessionCta`(kRed 아웃라인, 저장/공유 CTA와 별도 줄)·`_EndSessionDialog`(barrierDismissible:false) 신설,
@@ -134,6 +135,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-27 | App 개발 | **Common-Auth-01 수정** — `auth_service.dart` `signInAnonymously()`가 기존 로그인이 `isAnonymous`가 아니면 `FirebaseAuth.signOut()` 후 새 익명 세션을 발급하도록 변경. 교사로 로그인했던 기기를 학생 기기로 재사용해도 학생이 교사 UID로 입장하지 않게 됨. 호출부 3곳(`join_screen.dart`, `main.dart` 딥링크·교사 복귀)은 무수정 — 교사 복귀 경로는 `currentUid == null`일 때만 호출돼 바뀐 분기를 타지 않음. 로그아웃 범위는 Firebase만으로 의도적으로 좁힘(외부 SDK 호출로 학생 입장이 느려지는 것을 방지). 같은 기기를 여러 학생이 돌려쓰는 경우는 범위 밖으로 명시. `flutter analyze` 오류 0(기존 경고 10건), `flutter test` 23건 통과(신규 테스트 없음 — FirebaseAuth 목킹 인프라 부재). 실기기 미검증 |
 | 2026-08-26 | App 개발 | **리포트 화면 실제 종료 버튼 구현** (UI/UX 방 인계, `Gemini-1-Exit-03` 남은 설계 결정 완료). `report_screen.dart`에 `_EndSessionCta`(kRed 아웃라인)·`_EndSessionDialog`(barrierDismissible:false) 신설. `ReportScreen`에 `onEndSession` 콜백 추가, `teacher_home_screen.dart` `_goToReport()`에서 `_endSession`을 전달. 확인 시 종료 기록 후 `popUntil(isFirst)`로 랜딩까지 스택 정리(교사홈의 뒤로가기 경로는 1단계, 리포트는 2단계 깊이라 popUntil 사용). 학생 쪽 `_SessionEndedDialog`는 이미 `endedAt`을 구독 중이라 추가 작업 없음. `flutter analyze` 오류 0(기존 경고 10건 그대로), `flutter test` 23건 전원 통과(회귀 없음, 이 작업은 UI 글루 코드라 신규 단위 테스트는 추가하지 않음). 실기기 미검증 |
 | 2026-08-26 | Flutter UI/UX | 대표와 하단 독 `종료` 라벨 논의 — "종료"라는 이름·빨간색은 실제로 끝내는 동작(리포트 화면 안의 신규 버튼)에만 두고, 지금 이동만 하는 버튼은 중립색 유지로 확정. §8 App 개발 행에 [수업 끝내기] 구현 요청(위치·스타일·동작 명세) 인계 완료 |
 | 2026-08-26 | Flutter UI/UX | **앱개발 방 세션 라이프사이클(§16) 반영 batch.** Mercury-Report-02 잔여(하단 CTA null 가드)·04("다시 생성"→"생성" 라벨)·07(진입점 2곳 모두 가드) 해결. Mercury-4-Organize-01(P1, 투표 중 무반응→재탭→데이터 유실) 해결 — 탭이 항상 반응하도록 바꾸고 투표 중 SnackBar 안내 + 승인 취소 확인 다이얼로그 추가. Organize-04(kGreen 배경 위 kGreen 스피너) 해결. Gemini-1-Exit-04(나가기 문구 정정) 해결. Common-Rules-04(대표 결정 ③) 구현 — 학생 투표 화면 득표 막대(항상 0표) 제거, 마감 시 "결과는 앞 화면에서 확인해요" 안내로 대체. teacher_dock.dart `종료`→`수업기록` 라벨·아이콘 교체(§16 흐름과 조율). 전부 **코드 수정 완료·실기기 미검증**. MERCURY_TO_GEMINI_HANDOFF.md 폭 매트릭스 순회 목록에서 삭제된 tabs/ 3종 제외(Mercury-Redesign-01 반영) |

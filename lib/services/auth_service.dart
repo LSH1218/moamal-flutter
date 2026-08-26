@@ -147,10 +147,23 @@ class AuthService {
     return TeacherAccessResult.pending;
   }
 
-  /// 학생: 익명 로그인
+  /// 학생: 익명 로그인.
+  ///
+  /// 항상 익명 세션을 보장한다 (Common-Auth-01). 기존에 남아 있던 로그인이
+  /// 이미 익명이면 그대로 재사용하지만(같은 학생 재입장 시 참여 기록이 이어짐),
+  /// 실제 계정(교사가 로그인한 구글·카카오·네이버 등)이면 잘못된 신분으로
+  /// 입장하게 되므로 그 세션만 지우고 새 익명 세션을 발급한다.
+  ///
+  /// 여기서는 `FirebaseAuth.signOut()`만 호출한다 — 학생 입장은 수업 시작
+  /// 직후 빠르게 통과해야 하는 구간이라, 구글/카카오/네이버 SDK까지 함께
+  /// 끊는 전체 로그아웃(`signOut()`)은 불필요한 네트워크 호출과 지연·실패
+  /// 위험을 더한다. 기기에 남은 외부 로그인 상태 자체는 건드리지 않는다.
   Future<String> signInAnonymously() async {
     final current = _auth.currentUser;
-    if (current != null) return current.uid;
+    if (current != null) {
+      if (current.isAnonymous) return current.uid;
+      await _auth.signOut();
+    }
     final result = await _auth.signInAnonymously();
     return result.user!.uid;
   }
