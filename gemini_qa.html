@@ -226,6 +226,7 @@
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">에뮬레이터 이미지에 시스템 이미지가 <b><code>google_apis</code> 또는 <code>google_apis_playstore</code></b>인지 <span class="new-badge">확인됨</span><span class="check-note">Google 로그인은 Play <b>서비스</b>를 쓰며 이건 <code>google_apis</code>에 이미 포함된다. Play <b>스토어 앱</b>(<code>PlayStore.enabled</code>)은 불필요. <code>default</code>(AOSP) 이미지만 로그인 불가 → 그 때는 슈퍼바이저 모드(로고 3탭 → PIN <code>1218</code>)로 우회. <b>현재 Pixel_6 AVD = <code>google_apis</code> / API 34 — 충족</b></span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><s>에뮬 Extended controls → Microphone → Virtual microphone uses host audio input ON</s> <span class="ext-tag">N/A</span><span class="check-note">PC에 물리 마이크가 없어 켜도 입력이 없다. 에뮬 STT는 시도하지 않고, 마이크가 생기면 그때 다시 본다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">Windows 마이크 권한 · 기본 입력 장치 확인 <span class="new-badge">확인됨</span><span class="check-note">권한은 <code>Allow</code>, 다만 <b>연결된 마이크 없음</b>. 상단 경고 참조</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>학생 역할 기기의 앱 데이터 삭제</b> 후 시작 <span class="risk-badge">필수</span><span class="check-note">Mercury에서 이 공기계를 <b>교사</b>로 썼다. <code>signInAnonymously()</code>는 기존 로그인이 남아 있으면 그 계정을 그대로 돌려주므로(<code>Common-Auth-01</code>), 지우지 않으면 학생이 <b>교사 UID로 입장</b>한다. 이때 <code>isOwner()</code>가 참이라 <b>권한 오류가 하나도 안 나면서 S-7~S-9가 전부 거짓 통과</b>한다. 설정 → 앱 → 모아말 → 저장공간 → 데이터 삭제. <b>확인법</b>: 입장 직후 Firestore <code>participants</code> 문서 ID가 교사 UID가 아닐 것. 저장된 <code>active_teacher_session</code>도 함께 지워져 교사 화면으로 튀는 문제도 같이 해소된다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">공기계 개발자 모드 · USB 디버깅 ON → <code>adb devices</code>에 2대 모두 표시</span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">두 기기에 동시 설치 — 터미널 2개로 <code>flutter run -d &lt;deviceId&gt;</code><span class="check-note">같은 PC 빌드라 debug SHA-1이 동일해 Firebase 인증은 양쪽 다 통과한다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">logcat을 기기별로 분리 수집 — <code>adb -s &lt;serial&gt; logcat</code><span class="check-note">2기기 로그가 섞이면 원인 추적이 사실상 불가능하다</span></span></label>
@@ -383,7 +384,7 @@
       <span class="chevron">▾</span>
     </div>
     <div class="section-body">
-      <div class="warn-note"><span class="icon">⚠</span><span><b>알려진 위험이 실재한다.</b> 현황판 §6에 <code>ideas</code>의 <code>create, update</code>가 <b>모든 인증 사용자에게 허용</b>되어 있어 “학생이 다른 학생의 의견을 수정 가능”이 미해결 P1으로 남아 있다. Mercury는 교사 1인 세션이라 이걸 확인할 방법이 없었다. <b>실패하더라도 Gemini는 계속 진행하되, 결과는 Apollo 진입 차단 조건으로 기록한다.</b></span></div>
+      <div class="warn-note"><span class="icon">⚠</span><span><b>이 섹션은 규칙 배포 뒤에 실행한다.</b> <code>ideas</code> 작성자 검증(<code>authorUid</code>)은 2026-08-26에 수정됐지만 <b>배포는 새 빌드를 두 기기에 설치한 뒤</b>다(현황판 §15). 배포 전에 돌리면 S-7은 반드시 실패한다 — 그건 결함이 아니라 <b>미배포 상태를 본 것</b>이다. 순서: <b>새 빌드 두 기기 설치 → <code>firebase deploy --only firestore:rules</code> → 학생 의견 1건 제출로 <code>authorUid</code> 기록 확인 → S 섹션 시작.</b></span></div>
 
       <div class="divider-label">학생 1대로 확인 가능</div>
       <div class="check-group">
@@ -393,12 +394,13 @@
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-4</b> 학생 A가 <b><code>teacher_notes</code>를 쓸 수 없다</b></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-5</b> 교사가 세션 관리 권한을 <b>정상적으로</b> 행사한다<span class="check-note">세션 생성 · <code>voteOpen</code> 전환 · 승인 저장 · <code>forceStop</code> 쓰기 · <code>mergeLogs</code> 기록까지</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-6</b> 학생이 rate limit 컬렉션(<code>sttRateLimits</code> · <code>openaiRateLimits</code>)에 접근할 수 없다<span class="check-note">Functions Admin SDK 전용이어야 한다</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-10</b> 학생이 <b><code>sessions</code> 컬렉션 목록을 조회할 수 없다</b><span class="check-note">2026-08-26 수정(<code>Common-Rules-03</code>). 이전에는 인증만 되면 <b>모든 교사의 세션 코드·제목·ownerUid</b>를 훑을 수 있었다. 코드로 <code>collection(&#39;sessions&#39;).get()</code>을 시도해 <code>PERMISSION_DENIED</code> 확인. <b>세션 코드로 단건 조회하는 정상 참여 경로는 계속 동작해야 한다</b> — 여기가 막히면 규칙이 과하게 잠긴 것</span></span></label>
       </div>
 
       <div class="divider-label">학생 2명 필요 — G7 역할 스왑 때 함께</div>
       <div class="check-group">
-        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-7</b> 학생 A가 <b>학생 B의 <code>idea</code>를 수정할 수 없다</b> <span class="risk-badge">P1 게이트</span><span class="check-note">현재 규칙상 <b>수정이 될 가능성이 높다(= 결함 확인)</b>. 되면 Apollo 차단 조건으로 확정</span></span></label>
-        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-8</b> 학생 A가 <b>학생 B의 <code>vote</code>를 수정할 수 없다</b> <span class="risk-badge">P1 게이트</span><span class="check-note">규칙상 <code>votes</code>는 본인만 쓰기 가능 — 실제로 막히는지 확인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-7</b> 학생 A가 <b>학생 B의 <code>idea</code>를 수정할 수 없다</b> <span class="risk-badge">P1 게이트</span><span class="check-note">2026-08-26 수정분(<code>Common-Rules-01</code>) 검증 구간. <b>규칙 배포 후에는 <code>PERMISSION_DENIED</code>가 정답</b>이다. 수정이 되면 Apollo 차단 조건 확정. 함께 볼 것 — <b>학생 A가 자기 의견의 <code>authorUid</code>를 남의 UID로 바꿔 쓰는 것도 거부</b>되어야 한다</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-8</b> 학생 A가 <b>학생 B의 <code>vote</code>를 수정할 수 없다</b> <span class="risk-badge">P1 게이트</span><span class="check-note">규칙상 <code>votes</code>는 본인만 쓰기 가능 — 실제로 막히는지 확인. <b>함께 관찰</b>: 교사가 투표를 닫은(<code>voteOpen=false</code>) 뒤에도 <b>본인 표는 계속 써진다</b> — 이는 알려진 결함(<code>Common-Rules-02</code>, Gemini 이후 수정 예정)이므로 <b>실패로 기록하지 않고 재현 여부만 남긴다</b></span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>S-9</b> 학생 A가 <b>학생 B의 <code>participants</code> 문서를 수정할 수 없다</b><span class="check-note"><code>forceStop</code>을 학생끼리 서로 걸 수 있으면 안 된다</span></span></label>
       </div>
 

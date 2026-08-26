@@ -5,7 +5,7 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-26
-- 갱신한 역할: 백엔드/Firebase (ideas 작성자 검증 추가 · S 섹션 권한 사전 점검) → Flutter 앱개발 (세션 라이프사이클 4건 일괄 구현)
+- 갱신한 역할: 백엔드/Firebase (세션 라이프사이클 스키마 규칙 검증 · 규칙 배포 시점 확정) → Flutter 앱개발 (세션 라이프사이클 4건 일괄 구현)
 - 기준 Flutter 커밋: `2353c77` (docs: 체크리스트 G1에 실제 수행 항목 반영) + **세션 라이프사이클·권한 변경분 미커밋**
 
 ## 1. 경영 요약
@@ -85,7 +85,7 @@
 | 슈퍼바이저 모드 노출 | 중간 | 랜딩 로고 3탭 → PIN 1218 | 출시 전 제거 또는 숨김 처리 |
 | ~~학생이 다른 의견을 수정 가능~~ | ~~높음~~ | **코드 수정 완료 2026-08-26 · 배포 전** — `submitIdea()`가 `authorUid` 기록, 규칙이 작성자 검증 (`Common-Rules-01`). Gemini S-7에서 실검증, Apollo 진입 차단 조건 유지 | 새 빌드 설치 → 규칙 배포 순서 준수 (§15) |
 | 투표 종료 후에도 학생 vote 쓰기 가능 | 중간 | `votes` 규칙에 `voteOpen` 조건 없음 (`Common-Rules-02`). 오프라인 큐 쓰기가 확정 결과를 바꿀 수 있음 | 규칙안 준비됨 — Gemini QA 후 적용 (§15) |
-| `sessions` 컬렉션 전체 목록 조회 가능 | 중간 | 익명 사용자가 모든 세션 코드·제목·ownerUid 열람 가능 (`Common-Rules-03`) | list 차단 — 앱은 단건 get만 사용해 영향 없음 |
+| ~~`sessions` 컬렉션 전체 목록 조회 가능~~ | ~~중간~~ | **코드 수정 완료 2026-08-26 · 배포 전** — `allow get` / `allow list: if false` 분리 (`Common-Rules-03`) | Common-Rules-01과 같은 배포에 묶음 (§15) |
 | 학생이 교사 UID로 입장 가능 | 중간 | `signInAnonymously()`가 기존 로그인 세션을 재사용 (`Common-Auth-01`). 권한 오류 없이 잘못된 데이터가 쌓임 | QA는 앱 데이터 삭제로 회피, 근본 수정은 앱개발 방 |
 
 ## 7. 현재 우선순위
@@ -112,7 +112,7 @@
   `학생 A → 타인 idea/vote/participants 수정 불가`, `approvedGroups·sessions·teacher_notes 쓰기 불가`, `교사 권한 정상`을 확인하며
   결과는 **Apollo 진입 차단 조건**으로 취급한다 (§6 ‘학생이 다른 의견을 수정 가능’ 위험과 직결).
   **장비 제약**: PC에 물리 마이크가 없음(2026-08-25 확인) → 에뮬 STT 불가. 마이크는 항상 공기계에 있으므로 **1라운드=학생 STT, G7=교사 STT**로 나누어 둘 다 실기기 검증한다. 1라운드는 교사 발문(2-8) 불가, G7은 학생 의견 생성 불가(1라운드 세션 재사용으로 우회).
-- **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
+- **Flutter UI/UX (진행 중)**: **학생 투표 화면 득표 표시 제거** — `Common-Rules-04` 대표 결정(2026-08-26, 선택지 ③). 학생은 `votes`를 읽을 권한이 없어 막대가 항상 0으로 보인다. 득표 막대·비율을 걷어내고 "투표 완료 · 결과는 앞 화면에서 확인해요"로 대체한다(`student_session_screen.dart` `_voteView()`). 결과 공개는 빔프로젝터 화면이 담당; ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: **`ideas` 규칙 배포** — 새 빌드 설치 확인 후 `firebase deploy --only firestore:rules` (§15, 순서 어기면 의견 제출 P0 회귀); Gemini S 섹션 결과 회수 후 `Common-Rules-02`(투표 종료 후 vote 쓰기)·`Common-Rules-03`(sessions list) 적용; 세션 `endedAt` 도입 후 ideas·votes 쓰기 차단 규칙 적용(§15); App Check 적용 — 익명 인증이 열려 있어 UID 단위 rate limit이 사실상 무력, 파일럿 전 필수; 개발/운영 환경 분리; rate limit 컬렉션 TTL 정책 설정 여부 콘솔 확인
@@ -130,6 +130,8 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-26 | 대표 결정 | **`Common-Rules-04` 선택지 ③ 확정** — 학생 화면에서 득표 표시를 제거하고 결과는 빔프로젝터 화면으로만 공개한다. `votes` 읽기 권한은 현행 유지(비밀투표), **백엔드 후속 작업 없음**. 구현은 [UI/UX] 주관. 보류한 ①(`voteTally` 집계 필드) 스키마는 §15에 보존 — 파일럿에서 개인 화면 결과 요구가 나오면 승격 |
+| 2026-08-26 | 백엔드/Firebase | §16 세션 라이프사이클 스키마의 "규칙 변경 불필요" 판단 검증 — `endedAt`·`groupSnapshot`(교사 세션 문서 update)·`leftAt`(본인 participants update) **세 건 모두 기존 규칙으로 통과 확인**. `groupSnapshot` 필드 방식은 비밀투표·프라이버시에 영향 없음(투표 데이터 미포함, 학생은 이미 ideas·approvedGroups 열람 가능)이나 **승인 전 초안이 학생 기기로 내려가는 점**과 **저장마다 전 학생이 세션 문서를 재수신하는 비용**을 §15에 기록. `firestore.rules` `sessions`를 `allow get`/`allow list: if false`로 분리(`Common-Rules-03`) — Common-Rules-01과 같은 배포에 묶음. **규칙 배포 시점 확정: 미구현 3건 완료 빌드를 두 기기 설치 직후, Gemini S 섹션 직전**(G0~G4는 현재 빌드로 진행 가능). 종료 후 ideas 쓰기 차단은 **클라이언트 잠금으로 충분하다는 앱개발 방 판단에 동의**하되 파일럿 전 규칙 승격 권고, `votes`는 예외로 Gemini 직후 적용. `gemini_qa.html` G0에 학생 기기 앱 데이터 삭제(`Common-Auth-01`) 필수 항목 추가, S 섹션 기대값 갱신 및 S-10 신설 |
 | 2026-08-26 | App 개발 | **세션 라이프사이클 4건 일괄 구현** (§16 신설). `Gemini-1-Exit-03` — `sessions.endedAt` 신설, 교사 종료 시 기록(`voteOpen: false` 동반), 학생 화면이 구독해 마이크·제출·투표 잠금 후 안내 → 랜딩 복귀. `Gemini-1-Exit-01` — `Participant.leftAt`·`isActive`·`SessionState.activeParticipants` 추가, `markParticipantLeft()` 신설(문서 삭제 아님), 나가기·종료 양쪽에서 호출, 사용처를 **접속 중**(LIVE 타일·빔프로젝터·마이크 제어·투표율 분모)과 **누적**(리포트)으로 분리. `Mercury-Session-02` — `models/group_snapshot.dart` 신설, 그룹 구성을 세션 문서 `groupSnapshot` **필드**에 저장(하위 컬렉션이 아니라 필드 → 보안 규칙 변경 불필요), `GeminiGroupingEngine.onGroupsChanged`(변경 4지점)·`restoreSnapshot()` 추가, 복원 의견을 `_processedIds`에 등록해 재그룹화 차단. `Mercury-Session-03` — `sessions.createdAt` 기준 경과 시간. `Mercury-Report-06` — `ReportScreen` StatefulWidget 전환, `onGenerateReport`가 `Future<MeetingReport?>` 반환. **정리**: `tabs/` 사재 코드 3개(1,129줄) 삭제(`Mercury-Redesign-01`), `organize_screen`·`cluster_vote_screen`의 `?? repo.listenToSession(...)` 폴백 제거 후 `sessionStream` required화(`Mercury-3-Student-01` 재발 지점 봉쇄). 테스트 12건 추가(총 18건 통과), `flutter analyze` 오류 0 · 경고/info 10 |
 | 2026-08-26 | 백엔드/Firebase | `firestore.rules` `ideas` 작성자 검증 추가 — `create`는 `authorUid == auth.uid`, `update`는 교사 또는 작성자 본인만(`authorUid` 변경 금지). `firebase_moamal_repository.dart` `submitIdea()`가 `authorUid` 기록(의견 쓰기 경로가 단일이라 레포지터리에서 채움). **미배포** — 새 빌드 설치 후 배포. Gemini S 섹션 사전 점검으로 `Common-Rules-02`(투표 종료 후 vote 쓰기 가능)·`Common-Rules-03`(sessions list 개방)·`Common-Rules-04`(학생이 votes 집계 불가)·`Common-Auth-01`(익명 로그인이 교사 세션 재사용) 신규 기록. 권한 계약을 §15로 신설 |
 | 2026-08-25 | Gemini QA | **G1(학생 진입) 실기기 완료** — 공기계(학생) + 에뮬(교사) 2기기. **결함 12건 발견 · 9건 수정 · 3건 설계 이관.** 수정: 랜딩 QR 버튼 스캐너 직행, 320dp 코드 입력 레이아웃(제목 3줄→2줄), QR 스캔 실패 대안(8초 힌트·errorBuilder), `다음` 버튼 제거·6자리 자동 확인, 딥링크 화면 중복 스택, 입력칸 테두리 겹침(테마 focusedBorder), 버튼 폭 축소(Column center), 나가기 다이얼로그 세로 배치. **참여자 카운트가 처음으로 0이 아닌 값(1)을 표시** — Mercury 내내 검증 불가했던 경로가 열림. 플랫폼 제약 확인: 삼성 기본 카메라가 커스텀 스킴을 무시해 1-3은 웹 럜딩 없이 달성 불가. 설계 이관 3건은 모두 **세션 라이프사이클**로 수렴(Exit-01 leftAt 확정, Exit-03 종료 상태 부재, Exit-04 문구 불일치) |
@@ -404,7 +406,7 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 
 | 컬렉션 | 교사(세션 소유자) | 본인 학생 | 다른 학생 · 미참여 익명 사용자 |
 |---|---|---|---|
-| `sessions/{code}` | 읽기·수정·삭제 | 읽기만 | 읽기만 — **단 컬렉션 전체 list도 가능**(`Common-Rules-03`) |
+| `sessions/{code}` | 읽기·수정·삭제 | 코드로 단건 조회만 | 코드로 단건 조회만 — **컬렉션 목록 조회 차단**(2026-08-26 수정, 배포 전 · `Common-Rules-03`) |
 | `ideas` (S-7) | 생성·읽기·수정·삭제 | 생성(본인 `authorUid`)·읽기·본인 것 수정 | 읽기만 — **수정 불가**(2026-08-26 수정, 배포 전) |
 | `approvedGroups` (S-2) | 생성·수정·삭제 | 읽기만 ✅ | 읽기만 ✅ |
 | `votes` (S-8) | 전체 읽기·삭제 | 본인 문서 생성·수정·읽기 | 타인 투표 읽기·쓰기 모두 불가 ✅ / **투표 종료 후에도 본인 쓰기는 가능**(`Common-Rules-02`) |
@@ -419,7 +421,13 @@ S-2 · S-9는 규칙·클라이언트 양쪽에서 정상이다. S-7은 이번�
 
 학생 기기는 `votes`·`participants` 컬렉션을 목록 조회할 수 없다. 레포지터리가 이 권한 오류를 빈 값으로 삼키므로 오류는 보이지 않지만, 학생 화면의 득표 집계가 항상 0이 된다(`Common-Rules-04`).
 
-### `ideas` 규칙 배포 순서 (중요)
+**2026-08-26 대표 결정 — 이 권한 구조를 그대로 둔다.** 학생 화면에서 득표 표시를 없애고 결과는 **빔프로젝터 화면으로만** 공개한다(선택지 ③). 따라서 `votes` 읽기 권한을 넓히지 않으며 비밀투표가 유지되고, **백엔드 후속 작업은 없다.** 구현은 [UI/UX]가 학생 투표 화면의 득표 막대를 "투표 완료 · 결과는 앞 화면에서 확인해요" 상태로 교체하는 것뿐이다. 개인 화면 결과 요구가 파일럿에서 나오면 그때 아래 ① 안으로 승격한다.
+
+> 보류해 둔 ① 안 (지금은 구현하지 않음): 교사 앱이 투표 종료 시 `sessions/{code}.voteTally = {groupId: count}`를 기록하고, 학생은 이미 읽기 권한이 있는 세션 문서로 집계만 본다. 개별 투표는 계속 비공개.
+
+### 규칙 배포 순서와 시점 (2026-08-26 확정)
+
+대기 중인 규칙 변경은 **두 건이고 한 번에 배포된다** — `Common-Rules-01`(ideas 작성자 검증)과 `Common-Rules-03`(sessions 목록 조회 차단). 규칙 파일은 통째로 배포되므로 분리 배포는 불가능하고, 후자는 클라이언트 동작 영향이 없어 묶어도 위험이 늘지 않는다.
 
 규칙은 배포 즉시 **모든 클라이언트**에 적용된다. `authorUid`를 쓰지 않는 구 빌드는 의견 제출이 전부 거부되므로(P0 회귀) 순서를 지켜야 한다.
 
@@ -435,11 +443,23 @@ firebase deploy --only firestore:rules
 
 기존 의견 문서(`authorUid` 없음)는 읽기·삭제가 그대로이고, 수정만 교사로 제한된다.
 
-### 세션 종료(`endedAt`) 이후 쓰기 차단 — 판단
+**시점: 앱개발 방 미구현 3건이 끝난 빌드를 두 기기에 설치한 직후, Gemini S 섹션 직전.**
 
-**규칙으로 막는 것을 권장한다.** 클라이언트 가드만으로는 ① 백그라운드에 있던 학생 앱의 지연 쓰기, ② 오프라인 큐가 종료 후 도달하는 경우, ③ 구 빌드를 막을 수 없다. 다만 학생에게 즉시 피드백을 주려면 **클라이언트 가드도 함께** 두어야 한다 — 규칙이 권위, 클라이언트는 UX다.
+- S 섹션(S-7·S-10)이 바로 이 수정분의 검증 구간이다. 배포 전에 S를 돌리면 S-7은 반드시 실패하는데, 그건 결함이 아니라 미배포 상태를 본 것이라 QA 기록만 오염된다.
+- 반대로 G0~G4는 **현재 빌드로 진행해도 된다.** 이 규칙 변경은 학생 진입·발화·마이크 제어·투표 경로에 영향이 없다.
+- 따라서 빌드가 늦어져도 **CORE 앞부분을 먼저 돌리고 S만 뒤로 미루면 된다.** QA 일정이 규칙 배포를 기다릴 필요는 없다.
+- **배포 이후에는 구 빌드로 QA를 이어가면 안 된다** — 되돌아갈 수 없는 지점이다. QA 도중 재설치가 필요해지면 반드시 같은 새 빌드로 한다.
+- 2라운드(G7 역할 스왑)는 기기 역할만 바뀌고 앱은 같으므로 추가 조치가 없다.
 
-적용 시점은 **`endedAt` 클라이언트 구현이 Gemini QA에서 확인된 후**다. 지금 넣으면 QA 핵심 경로에 새 거부 조건이 생긴다.
+### 세션 종료(`endedAt`) 이후 쓰기 차단 — 판단 (2026-08-26 갱신)
+
+앱개발 방이 클라이언트 잠금만 적용했고(§16), 백엔드는 **Gemini·Apollo 기간에는 그 판단에 동의한다.** 위협 모델이 "실수 방지"이고 참여자가 교실 안 학생이며, 오염이 생겨도 교사가 리포트에서 확인·정리할 수 있다. 의견 1건당 읽기 1회를 지금 추가할 이유가 못 된다.
+
+**다만 파일럿(외부 교실 배포) 전에는 규칙으로 승격할 것을 권고한다.** 그 시점에는 ① 통제할 수 없는 구 빌드가 현장에 남고, ② 학생 기기가 오프라인이었다가 복귀하며 큐에 쌓인 쓰기를 흘려보내는 상황이 실제로 발생한다. 클라이언트 잠금은 둘 다 막지 못한다.
+
+`votes`는 판단이 다르다. 종료 후 의견 1건이 늦게 들어오는 것은 교사가 지우면 되지만, **확정 선언 뒤에 득표가 바뀌는 것은 수업 결과 자체를 뒤집는다.** `Common-Rules-02`를 P1로 유지하는 이유이며, 이쪽은 파일럿을 기다리지 않고 Gemini 종료 직후 적용한다.
+
+적용할 때는 아래 함수 하나로 `endedAt`과 `voteOpen`을 함께 판정해 **세션 문서 조회를 쓰기당 1회로 묶는다.**
 
 ```
 function sessionOpen(sessionCode) {
@@ -448,11 +468,30 @@ function sessionOpen(sessionCode) {
 }
 ```
 
-- `ideas`의 `create`에 `&& (isOwner(sessionCode) || sessionOpen(sessionCode))` 추가
-- `votes`의 `create, update`에 동일 조건 추가 (`Common-Rules-02`의 `voteOpen` 조건과 한 번에 처리하면 규칙 내부 읽기 1회로 끝난다)
+- `ideas`의 `create`에 `&& (isOwner(sessionCode) || sessionOpen(sessionCode))` 추가 — 파일럿 전
+- `votes`의 `create, update`에 `sessionOpen()` + `voteOpen == true` 추가 — Gemini 종료 직후
 - `data.get('endedAt', null)`을 쓰는 이유: 이 필드가 없는 기존 세션 문서에서 규칙이 오류로 거부되는 것을 막기 위함
-- 비용: 의견·투표 쓰기 1건당 규칙 내부 문서 읽기 1회 (학급 25명 기준 수십 read, 무시 가능)
+- 비용: 해당 쓰기 1건당 규칙 내부 문서 읽기 1회 (학급 25명 기준 수십 read, 무시 가능)
 - 교사는 종료 후에도 기록을 정리할 수 있어야 하므로 `isOwner` 예외를 둔다
+
+### §16 스키마의 규칙 검증 결과 (2026-08-26)
+
+앱개발 방의 "보안 규칙 변경 불필요" 판단을 코드로 확인했다. **세 필드 모두 맞다.**
+
+| 쓰기 | 경로 | 통과 근거 |
+|---|---|---|
+| `endedAt` (`endSession`) | 교사가 세션 문서에 merge set | `sessions` update — `ownerUid`가 바뀌지 않는 merge set이라 `request.resource.data.ownerUid == resource.data.ownerUid` 조건을 만족 |
+| `groupSnapshot` (`saveGroupSnapshot`) | 교사가 세션 문서 필드에 merge set | 위와 동일. 하위 컬렉션이 아니므로 새 `match` 블록이 필요 없다 |
+| `leftAt` (`markParticipantLeft`) | 학생이 본인 participants 문서에 merge set | `firestore.rules`의 participants `create, update`가 `request.auth.uid == uid`를 이미 허용 |
+
+`Participant.toFirestore()`가 `leftAt: null`을 명시적으로 넣는 것도 규칙상 문제가 없다 — 본인 문서 update이므로 필드 구성에 제약이 없다.
+
+**`groupSnapshot`을 세션 문서 필드로 둔 선택 — 프라이버시·비용 평가**
+
+- **비밀투표에는 영향이 없다.** 스냅샷에는 `groupId` · `aiTitle` · `ideaIds`만 담기고 투표 데이터가 없다. `votes`는 여전히 본인 문서만 접근 가능하다.
+- **새로 새는 정보도 사실상 없다.** 학생은 이미 `ideas`와 `approvedGroups`를 전부 읽을 수 있다. 스냅샷이 추가로 드러내는 것은 **승인 전 초안 배치와 AI 제목**뿐이다.
+- 남는 것은 **정도의 문제 하나** — 교사가 아직 승인하지 않은 그룹 구성이 학생 기기에 내려간다. 앱 화면에는 안 보이지만, 변조된 클라이언트라면 교사가 공개하기 전에 볼 수 있다. 교실 데이터의 민감도를 감안하면 파일럿까지는 감수 가능하다고 판단한다. 승인 전 초안을 숨겨야 한다는 결정이 나오면 그때 하위 컬렉션(교사 전용 규칙)으로 옮기면 된다 — **그 경우에만 규칙 추가가 필요하다.**
+- **비용은 프라이버시보다 이쪽이 실질적이다.** 스냅샷은 그룹 이동·병합·되돌리기·AI 그룹화 배치마다 저장되고(`gemini_grouping_engine._persist()` 4곳), 세션 문서가 바뀔 때마다 **접속 중인 모든 학생 기기가 문서 전체를 다시 내려받는다.** 학생 25명·저장 20회면 500여 건의 읽기와 수 MB 전송이 된다. 요금은 무시할 수준이지만 교실 Wi-Fi에서는 체감될 수 있다. 의견 수가 늘어 체감되면 **저장 디바운스(예: 2초)**를 먼저 검토한다 — 문서 크기는 id만 담아 수십 KB를 넘지 않으므로 1MB 제한은 문제가 되지 않는다.
 
 ---
 
