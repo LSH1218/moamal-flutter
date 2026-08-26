@@ -1310,6 +1310,10 @@ class _ExitDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: kCardBg,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: dialogInsetH(context),
+        vertical: 24,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: Padding(
         padding: const EdgeInsets.all(22),
@@ -1354,56 +1358,43 @@ class _ExitDialog extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
+            // 320dp에서는 다이얼로그 내부 폭이 196dp밖에 안 되고
+            // [나가기]가 고정으로 81dp를 먹어 [계속 참여하기] 글자가 깨졌다.
+            // 럜딩 세션 선택 다이얼로그(Mercury-Layout-01)와 같은 처리 — 좀으면 세로 배치.
+            if (context.isNarrow)
+              Column(
+                children: [
+                  _ExitAction(
+                    label: '계속 참여하기',
+                    filled: true,
                     onTap: () => Navigator.pop(context, false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      decoration: BoxDecoration(
-                        color: kGreen,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Text(
-                        '계속 참여하기',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  _ExitAction(
+                    label: '나가기',
+                    filled: false,
+                    onTap: () => Navigator.pop(context, true),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: _ExitAction(
+                      label: '계속 참여하기',
+                      filled: true,
+                      onTap: () => Navigator.pop(context, false),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context, true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 15,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: const Color(0xFFD32F2F),
-                        width: 1.5,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Text(
-                      '나가기',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFD32F2F),
-                      ),
-                    ),
+                  const SizedBox(width: 10),
+                  _ExitAction(
+                    label: '나가기',
+                    filled: false,
+                    onTap: () => Navigator.pop(context, true),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1412,3 +1403,42 @@ class _ExitDialog extends StatelessWidget {
 }
 
 enum _MicStatus { idle, recording, transcribing, pending, done }
+
+/// 나가기 다이얼로그 버튼. 가로·세로 배치에서 같은 모양을 쓰기 위해 분리했다.
+class _ExitAction extends StatelessWidget {
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _ExitAction({
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        decoration: BoxDecoration(
+          color: filled ? kGreen : null,
+          border: filled ? null : Border.all(color: kRed, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: filled ? Colors.white : kRed,
+          ),
+        ),
+      ),
+    );
+  }
+}
