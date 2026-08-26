@@ -134,6 +134,10 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
       );
       return;
     }
+    // 이미 다른 화면을 보고 있는 중에 딥링크가 오면 그 위에 계속 쌓인다.
+    // 두 번 스캔하거나 공유 링크를 연달아 누르면 뒤로 가기 횟수가 쌓여 혼란스러워진다.
+    // 스택을 루트까지 걷어낸 뒤 한 겹만 쌓는다 (Gemini-1-Deeplink-02).
+    Navigator.popUntil(context, (route) => route.isFirst);
     // pushReplacement를 쓰면 랜딩이 스택에서 빠져 뒤로 가기가 블랙스크린이 된다.
     Navigator.push(
       context,
