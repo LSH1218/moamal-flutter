@@ -26,8 +26,19 @@ service cloud.firestore {
                     && resource.data.ownerUid == request.auth.uid;
 
       match /ideas/{ideaId} {
+        // 읽기: 세션에 접속한 인증 사용자 (교사·학생 공통)
         allow read: if signedIn();
-        allow create, update: if signedIn();
+        // 생성: 본인 UID를 authorUid로 기록한 문서만
+        allow create: if signedIn()
+                      && request.resource.data.authorUid == request.auth.uid;
+        // 수정: 교사 또는 작성자 본인만. authorUid 자체는 변경 불가
+        // (authorUid가 없는 구 문서는 교사만 수정 가능)
+        allow update: if isOwner(sessionCode)
+                      || (signedIn()
+                          && resource.data.authorUid == request.auth.uid
+                          && request.resource.data.authorUid
+                             == resource.data.authorUid);
+        // 삭제: 교사만
         allow delete: if isOwner(sessionCode);
       }
 
