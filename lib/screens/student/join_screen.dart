@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -7,6 +8,7 @@ import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/deep_link_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 import 'student_session_screen.dart';
 
 const _kRow1 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
@@ -158,7 +160,9 @@ class _JoinScreenState extends State<JoinScreen> {
   double _keyPadV(double maxHeight) {
     const textH = 22.0;
     const chrome = 8 + 12 + 7 * 3; // 패딩 + 행간
-    final budget = maxHeight * 0.34 - chrome;
+    // 320×693dp 기기에서 34%는 padV를 10.2로 내놓아 기존 11과 거의 같았다.
+    // 실측 필요 높이 690dp vs 가용 620dp로 70dp가 부족해 예산을 30%로 좀힌다.
+    final budget = maxHeight * 0.30 - chrome;
     final rowH = budget / 4;
     return ((rowH - textH) / 2).clamp(6.0, 11.0);
   }
@@ -214,22 +218,28 @@ class _JoinScreenState extends State<JoinScreen> {
   // ── Scrollable content ─────────────────────────────────────────────────────
 
   Widget _buildContent() {
+    // 320dp에서는 fontSize 30이 제목을 3줄로 밀어 한 줄(≈ 39dp)을 통째로 버린다.
+    // 코드 칸이 화면 밖으로 밀려나는 가장 큰 원인이다 (Gemini-1-Join-02).
+    final narrow = context.isNarrow;
+    final titleSize = narrow ? 24.0 : 30.0;
+    final gap = narrow ? 12.0 : 18.0;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+      padding: EdgeInsets.fromLTRB(20, narrow ? 14 : 22, 20, narrow ? 12 : 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             '선생님이 보여준\n6자리 코드를 넣어요',
             style: TextStyle(
-              fontSize: 30,
+              fontSize: titleSize,
               fontWeight: FontWeight.w900,
               letterSpacing: -1.2,
-              height: 1.3,
+              height: 1.25,
               color: kInk,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: narrow ? 6 : 8),
           Text(
             '칠판 화면의 코드와 똑같이 눌러요',
             style: TextStyle(
@@ -237,15 +247,15 @@ class _JoinScreenState extends State<JoinScreen> {
               color: kInk.withValues(alpha: 0.5),
             ),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: gap),
           _buildCodeCells(),
           if (_hasError) ...[
             const SizedBox(height: 12),
             _buildErrorCard(),
           ],
-          const SizedBox(height: 18),
+          SizedBox(height: gap),
           _buildOrDivider(),
-          const SizedBox(height: 18),
+          SizedBox(height: gap),
           _buildQrButton(),
         ],
       ),
@@ -377,11 +387,12 @@ class _JoinScreenState extends State<JoinScreen> {
 
   Widget _buildNextButton(bool canNext) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      padding: EdgeInsets.fromLTRB(14, 0, 14, context.isNarrow ? 6 : 10),
       child: GestureDetector(
         onTap: canNext ? _verify : null,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 19),
+          padding:
+              EdgeInsets.symmetric(vertical: context.isNarrow ? 15 : 19),
           decoration: BoxDecoration(
             color: canNext ? kGreen : kDisabled,
             borderRadius: BorderRadius.circular(18),
@@ -948,6 +959,32 @@ class QrScanScreen extends StatefulWidget {
 class _QrScanScreenState extends State<QrScanScreen> {
   bool _detected = false;
 
+  /// 일정 시간 인식되지 않으면 수동 입력을 권한다.
+  /// 랜딩 QR 버튼이 이 화면으로 직행하므로, 여기서 막히면 학생은
+  /// 카메라 화면만 보고 서 있게 된다 (Gemini-1-Join-03).
+  static const _hintAfter = Duration(seconds: 8);
+  bool _slowHint = false;
+  Timer? _hintTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _hintTimer = Timer(_hintAfter, () {
+      if (mounted && !_detected) setState(() => _slowHint = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
+  }
+
+  void _fallbackToCode() {
+    _hintTimer?.cancel();
+    Navigator.pop(context); // 코드 입력 화면으로 돌아간다
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -963,9 +1000,13 @@ class _QrScanScreenState extends State<QrScanScreen> {
               final code = DeepLinkService.parseScanned(raw);
               if (code != null) {
                 _detected = true;
+                _hintTimer?.cancel();
                 Navigator.pop(context, code);
               }
             },
+            errorBuilder: (context, error) => _CameraUnavailable(
+              onUseCode: _fallbackToCode,
+            ),
           ),
           SafeArea(
             child: Column(
@@ -975,7 +1016,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: _fallbackToCode,
                         child: Container(
                           width: 38,
                           height: 38,
@@ -1018,7 +1059,9 @@ class _QrScanScreenState extends State<QrScanScreen> {
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            '교사 화면의 QR 코드를 사각형 안에 맞춰주세요',
+                            _slowHint
+                                ? '잘 안 읽히면 아래에서 코드로 들어갈 수 있어요'
+                                : '교사 화면의 QR 코드를 사각형 안에 맞춰주세요',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 13,
@@ -1030,7 +1073,109 @@ class _QrScanScreenState extends State<QrScanScreen> {
                     }),
                   ),
                 ),
+                // 인식이 안 될 때 빠져나갈 길. 좌상단 화살표만으로는
+                // 학생이 대안을 찾지 못한다.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+                  child: GestureDetector(
+                    onTap: _fallbackToCode,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: _slowHint
+                            ? kYellow
+                            : Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _slowHint
+                              ? kYellow
+                              : Colors.white.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.keyboard_alt_outlined,
+                              size: 22,
+                              color: _slowHint ? kInk : Colors.white),
+                          const SizedBox(width: 10),
+                          Text(
+                            '코드 직접 입력하기',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _slowHint ? kInk : Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 카메라를 열 수 없을 때(권한 거부·하드웨어 없음·에뮬레이터 등)
+/// 검은 화면 대신 이유와 대안을 보여준다.
+class _CameraUnavailable extends StatelessWidget {
+  final VoidCallback onUseCode;
+
+  const _CameraUnavailable({required this.onUseCode});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: kInk,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.no_photography_outlined,
+              color: Colors.white, size: 44),
+          const SizedBox(height: 16),
+          const Text(
+            '카메라를 열 수 없어요',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '카메라 권한이 꺼져 있거나 사용할 수 없는 기기예요.\n선생님이 보여준 6자리 코드로 들어갈 수 있어요.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.5,
+              color: Colors.white.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 22),
+          GestureDetector(
+            onTap: onUseCode,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 26, vertical: 15),
+              decoration: BoxDecoration(
+                color: kYellow,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                '코드 직접 입력하기',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: kInk,
+                ),
+              ),
             ),
           ),
         ],
