@@ -666,7 +666,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     return Scaffold(
       backgroundColor: kGround,
       body: SafeArea(
+        // stretch가 없으면 Column이 center로 동작해 [들어가기]가
+        // 글자 크기만큼 오무라든다 (Gemini-1-Profile-02).
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(),
             Expanded(
@@ -863,7 +866,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                     color: kInk,
                   ),
                   decoration: const InputDecoration(
+                    // border만 끄면 포커스 시 테마의 focusedBorder(kGreen 2px)가
+                    // 살아나 직접 그린 테두리 안에 네모가 하나 더 생긴다 (Gemini-1-Profile-01).
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                     isCollapsed: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 18),
                   ),
@@ -917,7 +924,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               color: kInk,
             ),
             decoration: InputDecoration(
+              // 위 번호 필드와 동일 — 테마 focusedBorder 차단
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               hintText: '이름을 입력해요',
               hintStyle: TextStyle(
                 fontSize: 22,

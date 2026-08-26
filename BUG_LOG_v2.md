@@ -431,6 +431,31 @@
 - **수정** (2026-08-25): `Navigator.popUntil(context, (route) => route.isFirst)`로 스택을 랜딩까지 걷어낸 뒤 push.
   딥링크는 **항상 랜딩 위에 한 겹만** 쌓인다
 - **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (딥링크 2회 전달 후 뒤로 가기 3번에 랜딩 도달하는지)
+### [Gemini-1-Profile-01] ← G1 1-4 진행 중 발견 (2026-08-25)
+- **현상**: 이름·번호 입력 화면에서 **포커스된 입력 칸에만 테두리가 두 겹**으로 그려진다. 바깥은 우리가 그린 kGreen 2px, 안쪽에 같은 초록 테두리가 하나 더 생겨 네모 안에 네모가 든 모양이 된다. 포커스가 없는 칸은 정상(한 겹)
+- **원인**: `app_theme.dart:61-67`의 `inputDecorationTheme`에 **`focusedBorder`(kGreen, 2px)** 가 정의돼 있다.
+  두 필드는 `InputDecoration(border: InputBorder.none)`만 지정했는데, **Flutter는 포커스 상태에서 `border`가 아니라 `focusedBorder`를 사용한다.**
+  따라서 커스텀 `Container` 테두리 안쪽에 테마 테두리가 추가로 렌더링된다
+- **재현**: 번호 또는 이름 칸을 탭 → 해당 칸만 테두리 2겹
+- **파일**: `lib/screens/student/join_screen.dart` — `_buildNumberField()`, `_buildNameField()`
+- **등급**: P3 (기능 정상, 시각 결함)
+- **범위 확인**: `border: InputBorder.none`만 지정한 곳은 앱 전체에서 이 두 곳뿐이다.
+  `organize_screen.dart:866, 1979`와 `draft_sheet.dart:139`는 `focusedBorder`를 직접 지정해 두어 영향이 없다
+- **수정** (2026-08-25): 두 필드에 `enabledBorder: InputBorder.none`, `focusedBorder: InputBorder.none` 추가.
+  테마를 건드리면 테마에 의존하는 다이얼로그 입력칸(랜딩 코드 입력·수업 제목, 그룹명 수정)의 모양이 함께 바뀌므로 필드 단위로 막았다
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
+
+### [Gemini-1-Profile-02] ← G1 1-4 진행 중 발견 (2026-08-25)
+- **현상**: `들어가기` 버튼이 **글자 크기만큼만 오므라든 작은 사각형**으로 화면 가운데 뜬다. 코드 입력 화면의 전체 폭 CTA와 모양이 어긋나고, 학생이 눌러야 할 주 버튼치고 타깃이 작다
+- **원인**: `StudentProfileScreen`의 최상위 `Column`에 `crossAxisAlignment`가 지정되지 않아 기본값 **`center`** 로 동작한다.
+  버튼은 `Padding → GestureDetector → Container(width 미지정)` 구조라 가로 제약을 받지 못하고 자식(Text) 크기로 축소된다.
+  본문 영역은 안쪽 `Column`에 `stretch`가 있어 정상이었고, 키패드는 `Row + Expanded` 구조라 폭을 채워서 **버튼만 티가 났다**
+- **참고**: 코드 입력 화면의 구 `다음` 버튼도 동일한 이유로 작게 나왔다. 그 버튼은 Gemini-1-Join-04에서 제거됐다
+- **파일**: `lib/screens/student/join_screen.dart` — `_StudentProfileScreenState.build()`
+- **등급**: P3
+- **수정** (2026-08-25): 최상위 `Column`에 `crossAxisAlignment: CrossAxisAlignment.stretch` 지정
+- **비고**: 이름 칸에는 이미 `onSubmitted: (_) => _enter()`가 있어 **키보드의 `완료`로도 입장할 수 있다.** 번호·이름은 길이가 가변이라 코드처럼 자동 제출은 불가하므로 버튼 자체는 유지한다
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
 ---
 
 ## Apollo
