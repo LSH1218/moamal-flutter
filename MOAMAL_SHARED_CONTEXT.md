@@ -112,6 +112,7 @@
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
+- **App 개발 (Gemini 이관, 우선)**: **학생 퇴장 처리 구현** — `Gemini-1-Exit-01`. 2026-08-25 대표 결정으로 **`leftAt` 필드 방식 확정**. 현재 나가기가 Firestore에 아무것도 쓰지 않아 교사 화면 `참여`가 줄지 않고 마이크 제어 목록에 나간 학생이 남는다. 명세는 `BUG_LOG_v2.md` Gemini-1-Exit-01 참조. **보안 규칙 변경은 불필요**(`firestore.rules:54`가 본인 문서 update를 이미 허용)
 - **App 개발**: ~~`flutter analyze` 후 오류 수정~~ → 2026-08-25 실행, **오류 0건**(경고·info 11건: 미사용 선언 4, 스타일 7);
   Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 → Gemini G6;
   **미해결 P1** — Mercury-Report-06(리포트 화면 미갱신), Mercury-Session-02(재시작 시 병합·승인 결과 소실), Mercury-4-Organize-01(승인 취소 확인 다이얼로그).

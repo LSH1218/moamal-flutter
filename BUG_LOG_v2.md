@@ -480,8 +480,30 @@
   1. **나가기 시 participants 문서 삭제** — 단순하고 직관적. 단 리포트가 참여자를 과소 집계하게 되고, 백그라운드·앱 강제 종료는 감지 못해 반쪽이다
   2. **`leftAt`/`active` 필드 추가** — 누적과 현재를 모두 보존. `참여 12 · 접속 8`처럼 분리 표시 가능. 리포트와도 정합. 구현량은 더 큼
   3. **라벨만 정정** (`참여` → `입장`) — 누적임을 명확히 하고 기능은 유지. 가장 싸지만 마이크 제어 목록 문제는 남는다
-- **권고**: 2번. 단 `Mercury-Report-05`와 **함께 결정**해야 하므로 Gemini 중에는 기록만 하고 진행한다
-- **상태**: 🔴 미해결 — 설계 결정 필요 (전략기획 · 앱개발)
+- **결정** (2026-08-25, 대표): **선택지 2 — `leftAt` 필드 추가**로 확정. 누적 입장자와 현재 접속자를 모두 보존한다
+- **구현 분담** (QA 방에서 구현하지 않음 — 스키마 변경이 QA 중 데이터 모양을 바꾸고, 표시 정책이 5개 화면에 걸리기 때문):
+
+  | 방 | 작업 |
+  |---|---|
+  | **앱개발** | 모델·리포지터리·퇴장 호출 (아래 명세) |
+  | **Flutter UI/UX** | `참여` 타일 표시 정책 — 접속 중 / 누적 / 병기 중 택일 |
+  | **전략기획** | 리포트 "참여 N명" 정의 확정 (Mercury-Report-05와 동시 결정) |
+  | **AI/백엔드** | **없음** — `firestore.rules:54`가 이미 본인 문서 `update`를 허용하므로 규칙 변경·재배포 불필요 |
+
+- **앱개발 명세**:
+  1. `models/participant.dart` — `DateTime? leftAt` 추가, `bool get isActive => leftAt == null`.
+     `fromFirestore`에서 `(data['leftAt'] as Timestamp?)?.toDate()`, `toFirestore`에 `'leftAt': null` 포함
+     (재입장 시 `merge: true` set으로 자동 해제되도록)
+  2. `models/session_state.dart` — `List<Participant> get activeParticipants => participants.where((p) => p.isActive).toList()`
+  3. `moamal_repository.dart` / `firebase_moamal_repository.dart` — `Future<void> markParticipantLeft(String sessionCode, String uid)`
+     → `participants/{uid}`에 `{'leftAt': FieldValue.serverTimestamp()}` merge set
+  4. `student_session_screen.dart` `_ExitDialog` 확인 후 — `Navigator.pop()` **전에** `markParticipantLeft` 호출
+  5. 호출부 정리 — 현재 `participants.length`를 쓰는 곳은 의미에 따라 갈라야 한다:
+     - **접속 중**: LIVE 통계 타일, `mic_control_screen`(나간 학생에게 마이크 제어를 시도하게 됨), `beam_projector_screen`, `organize_screen:1309`(투표율 분모 — 나간 학생은 투표할 수 없다)
+     - **누적**: 리포트 참여자 수
+- **한계 (명시해 둘 것)**: 명시적 `나가기`만 감지한다. 앱 강제 종료·백그라운드 장기 이탈은 잡히지 않는다.
+  완전한 접속 상태가 필요하면 heartbeat(주기적 `lastSeenAt` 갱신)가 별도로 필요하며, 이는 Firestore 쓰기 비용이 늘어난다 — 파일럿 이후 판단
+- **상태**: 🟡 결정 완료 · **구현 대기** (앱개발 방)
 
 ### [Gemini-1-Exit-02] ← 위 항목 확인 중 사진에서 발견 (2026-08-25)
 - **현상**: 학생 나가기 확인 다이얼로그에서 **`계속 참여하기` 글자가 버튼 밖으로 삐져나와 두 줄로 깨진다** (`계속 참여하` / `기`)
