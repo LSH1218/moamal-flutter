@@ -13,7 +13,11 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionCode} {
-      allow read: if signedIn();
+      // 단건 조회만 허용한다. 목록(list) 조회를 열어두면 인증만 된 사용자가
+      // 모든 교사의 세션 코드·제목·ownerUid를 훑을 수 있다 (Common-Rules-03).
+      // 앱은 세션 코드로 단건 get·snapshots만 사용하므로 동작 영향이 없다.
+      allow get: if signedIn();
+      allow list: if false;
 
       allow create: if signedIn()
                     && request.resource.data.ownerUid == request.auth.uid;
