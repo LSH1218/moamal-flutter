@@ -223,15 +223,18 @@
     <div class="section-body">
       <div class="warn-note"><span class="icon">⚠</span><span>에뮬레이터가 <b>교사</b>다. 교사는 Google 로그인 · 마이크 · QR 표시를 모두 쓰므로 이미지 선택이 중요하다.</span></div>
       <div class="check-group">
-        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">에뮬레이터 이미지에 <b>Google Play</b> 포함 확인<span class="check-note">없으면 교사 Google 로그인 불가 → 슈퍼바이저 모드(로고 3탭 → PIN <code>1218</code>)로 우회. 기능 차이는 없음</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">에뮬레이터 이미지에 시스템 이미지가 <b><code>google_apis</code> 또는 <code>google_apis_playstore</code></b>인지 <span class="new-badge">확인됨</span><span class="check-note">Google 로그인은 Play <b>서비스</b>를 쓰며 이건 <code>google_apis</code>에 이미 포함된다. Play <b>스토어 앱</b>(<code>PlayStore.enabled</code>)은 불필요. <code>default</code>(AOSP) 이미지만 로그인 불가 → 그 때는 슈퍼바이저 모드(로고 3탭 → PIN <code>1218</code>)로 우회. <b>현재 Pixel_6 AVD = <code>google_apis</code> / API 34 — 충족</b></span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">에뮬 Extended controls → Microphone → <b>Virtual microphone uses host audio input</b> ON<span class="check-note">교사 STT가 PC 마이크로 들어간다. 꺼져 있으면 교사 발화 항목 전체가 막힘</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">Windows 마이크 권한 · 기본 입력 장치 확인<span class="check-note">에뮬은 호스트 기본 입력 장치를 그대로 쓴다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">공기계 개발자 모드 · USB 디버깅 ON → <code>adb devices</code>에 2대 모두 표시</span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">두 기기에 동시 설치 — 터미널 2개로 <code>flutter run -d &lt;deviceId&gt;</code><span class="check-note">같은 PC 빌드라 debug SHA-1이 동일해 Firebase 인증은 양쪽 다 통과한다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">logcat을 기기별로 분리 수집 — <code>adb -s &lt;serial&gt; logcat</code><span class="check-note">2기기 로그가 섞이면 원인 추적이 사실상 불가능하다</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">Firestore 정리 — 이전 세션의 <code>votes/test_uid_1</code> 삭제 또는 새 세션으로 진행<span class="check-note">테스트 잔여 투표가 실제 학생 투표와 섞이면 득표 판독 불가</span></span></label>
-        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">공기계 논리 폭 기록 (Mercury 기준 320dp)<span class="check-note">G8 폭 매트릭스의 기준점</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label">두 기기의 논리 폭 확인 <span class="new-badge">확인됨</span><span class="check-note">공기계 SM-A305N = <b>320dp</b> (Android 11 / API 30) · Pixel_6 AVD = 1080×2400 / density 420 = <b>411dp</b> (API 34). G8 매트릭스의 320·411 두 칸은 별도 설정 없이 이미 커버된다</span></span></label>
       </div>
+      <div class="info-note"><span class="icon">ℹ</span><span><b>현재 환경 실측 (2026-08-25 확인).</b> 교사 <code>Pixel_6</code> AVD — 이미지 <code>google_apis</code> / API 34 / x86_64, 마이크 <code>hw.audioInput=yes</code>, RAM 2048MB, <b>411dp</b>. 학생 <code>SM-A305N</code> — Android 11 / API 30 / arm64, <b>320dp</b>, USB 연결 확인됨. <b>남은 조치는 두 가지뿐이다</b> — 런타임 마이크 토글 확인, 그리고 G7 전 후면 카메라 변경.</span></div>
+      <div class="warn-note"><span class="icon">⚠</span><span><b>후면 카메라가 <code>virtualscene</code>이다.</b> 에뮬 카메라가 실제 웹캠이 아니라 가상 3D 방을 비추므로, <b>G7(역할 스왑)에서 에뮬이 학생이 되면 QR 스캔을 할 수 없다.</b> G7 진입 전에 AVD 설정에서 후면 카메라를 <code>Webcam0</code>으로 바꾸거나, 해당 항목만 코드 직접 입력으로 대체한다. <b>1라운드(에뮬=교사)에서는 에뮬이 QR을 표시만 하므로 문제 없다.</b></span></div>
+      <div class="warn-note"><span class="icon">⚠</span><span><b>RAM 2048MB.</b> 에뮬 1대는 충분하지만 G5(다중 학생)에서 <b>에뮬 2대를 동시에 띄우려면 빠듯하다.</b> G5를 확장 항목으로 둔 이유 중 하나다. 시도한다면 두 번째 AVD의 RAM을 낮추거나, 실패 시 <code>BLOCKED</code>로 종료한다.</span></div>
       <div class="info-note"><span class="icon">ℹ</span><span><b>크로스토크 주의.</b> 같은 방에서 교사(PC 마이크)와 학생(공기계 마이크)이 동시에 녹음하면 서로의 소리를 주워 담는다. <b>한 번에 한쪽만 녹음</b>을 원칙으로 하고, 크로스토크 자체는 관찰만 기록해 Apollo(실교실)로 넘긴다.</span></div>
     </div>
   </div>
@@ -396,7 +399,7 @@
       <span class="chevron">▾</span>
     </div>
     <div class="section-body">
-      <div class="warn-note"><span class="icon">⚠</span><span>에뮬 후면 카메라를 <code>webcam0</code>으로 설정하지 않으면 <b>QR 스캔 항목은 수행 불가</b>다. 설정이 어려우면 해당 항목만 스킵하고 코드 입력으로 대체한다.</span></div>
+      <div class="warn-note"><span class="icon">⚠</span><span><b>현재 Pixel_6 AVD의 후면 카메라는 <code>virtualscene</code>이라 QR 스캔이 불가능하다.</b> G7 진입 전에 AVD 설정에서 <code>Webcam0</code>으로 바꾸거나, 해당 항목만 스킵하고 코드 직접 입력으로 대체한다.</span></div>
       <div class="check-group">
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>7-1</b> 공기계(교사) 세션 생성 → 320dp에서 교사 화면 레이아웃 정상<span class="check-note">하단 독 버튼 5개가 좁은 폭에서 겹치거나 잘리는지</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>7-2</b> 에뮬(학생) 코드 입력 참여</span></label>
@@ -482,7 +485,7 @@
       <div class="check-group">
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-1</b> 320dp — 랜딩 다이얼로그 3종 <span class="fix-badge">수정 검증</span><span class="check-note">Mercury-Layout-01 수정분(PIN 패드·코드 입력·세션 선택). 실기기 미검증 상태</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-2</b> 360dp — 국내 최다 폭. 주요 화면 순회</span></label>
-        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-3</b> 411dp — 픽셀·대화면 안드로이드</span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-3</b> 411dp — 픽셀·대화면 안드로이드 <span class="ext-tag">Pixel_6 AVD로 커버</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-4</b> 600dp — compact↔tablet 경계. 폰 가로 모드 포함</span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-5</b> 834dp — 900dp 미만이라 <b>compact 레이아웃이 적용된다.</b> 적절한지 판단</span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>8-6</b> 1194dp — 태블릿 가로</span></label>
