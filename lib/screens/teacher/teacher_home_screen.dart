@@ -49,7 +49,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   bool _isLoading = true;
 
   // LIVE 화면 상태
-  late DateTime _sessionStart;
+  // Firestore createdAt이 오면 그 값으로 교체된다 (Mercury-Session-03).
+  DateTime _sessionStart = DateTime.now();
   String _elapsedText = '00:00';
   Timer? _elapsedTimer;
 
@@ -113,13 +114,22 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('active_teacher_session', sessionCode);
 
+    _groupingEngine.onGroupsChanged = _persistGroupSnapshot;
+
     _sessionStream = _repo.listenToSession(sessionCode);
     _sessionStream!.listen((state) {
       if (!mounted) return;
       _groupingEngine.sessionTitle = state.title;
+      // 복원은 makeGroups()보다 반드시 먼저다 (Mercury-Session-02).
+      // 순서가 뒤바뀌면 기존 의견이 전부 버퍼에 들어가 AI가 처음부터
+      // 다시 그룹화하고, 교사가 정리한 구성이 그대로 덮인다.
+      _groupingEngine.restoreSnapshot(state.groupSnapshot, state.ideas);
+      // 수업 경과 시간은 앱 실행 시각이 아니라 세션 생성 시각 기준 (Mercury-Session-03)
+      if (state.createdAt != null) _sessionStart = state.createdAt!;
       setState(() {
         _session = state;
         _groups = _groupingEngine.makeGroups(state.ideas);
+        _elapsedText = _formatElapsed();
       });
     });
 
@@ -129,6 +139,25 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     });
 
     setState(() => _isLoading = false);
+  }
+
+  // 그룹 구성이 바뀔 때마다 Firestore에 저장한다.
+  // 저장 실패는 수업 진행을 막지 않는다 — 다음 변경에서 다시 시도된다.
+  void _persistGroupSnapshot(List<Group> groups) {
+    final code = _session.sessionCode;
+    if (code.isEmpty) return;
+    _repo.saveGroupSnapshot(code, groups).catchError((_) {});
+  }
+
+  /// 교사 종료 — 세션에 endedAt을 남겨 학생 화면이 종료를 인지하게 한다
+  /// (Gemini-1-Exit-03). 기록에 실패해도 교사는 화면을 벗어날 수 있어야 하므로
+  /// 예외를 삼키고 로컬 복귀 상태만 정리한다.
+  Future<void> _endSession() async {
+    try {
+      await _repo.endSession(_session.sessionCode);
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('active_teacher_session');
   }
 
   String _formatElapsed() {
@@ -158,8 +187,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     }).catchError((_) {});
   }
 
-  Future<void> _generateReport() async {
-    if (_isGeneratingReport || _groups.isEmpty) return;
+  /// 생성된 리포트를 **반환**한다 — `ReportScreen`이 결과를 직접 받아
+  /// 자기 화면을 갱신하기 위함이다 (Mercury-Report-06).
+  Future<MeetingReport?> _generateReport() async {
+    if (_isGeneratingReport || _groups.isEmpty) return _meetingReport;
     setState(() => _isGeneratingReport = true);
     try {
       final counts = _groupingEngine.voteCounts(_groups, _session.votes);
@@ -170,12 +201,14 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _session.title, _groups, counts, 0,
           teacherNotes: allNotes);
       if (mounted) setState(() => _meetingReport = report);
+      return report;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('리포트 생성 실패: $e')),
         );
       }
+      return null;
     } finally {
       if (mounted) setState(() => _isGeneratingReport = false);
     }
@@ -393,12 +426,15 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   void _goToSummary() {
+    // 세션 스트림이 준비되기 전에는 진입하지 않는다 — OrganizeScreen은
+    // 스트림을 직접 만들지 않고 여기서 받은 것만 쓴다 (Mercury-3-Student-01).
+    if (_sessionStream == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => OrganizeScreen(
           sessionCode: _session.sessionCode,
-          sessionStream: _sessionStream,
+          sessionStream: _sessionStream!,
           initialSession: _session,
           groups: _groups,
           repo: _repo,
@@ -569,8 +605,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         if (didPop) return;
         final leave = await _onWillPop();
         if (leave && mounted) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('active_teacher_session');
+          await _endSession();
           if (mounted) Navigator.pop(context);
         }
       },
@@ -629,7 +664,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                         Padding(
                           padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                           child: StatRow(
-                            participantCount: _session.participants.length,
+                            participantCount: _session.activeParticipants.length,
                             ideaCount: _session.ideas.length,
                             groupCount: _groups.length,
                           ),
@@ -745,7 +780,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       children: [
         StatRow(
-          participantCount: _session.participants.length,
+          participantCount: _session.activeParticipants.length,
           ideaCount: _session.ideas.length,
           groupCount: _groups.length,
         ),

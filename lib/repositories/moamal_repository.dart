@@ -1,4 +1,5 @@
 import '../models/approved_group.dart';
+import '../models/group.dart';
 import '../models/idea.dart';
 import '../models/merge_log.dart';
 import '../models/participant.dart';
@@ -14,6 +15,16 @@ abstract class MoamalRepository {
   Future<void> deleteApprovedGroup(String sessionCode, String groupId);
   Future<void> joinSession(String sessionCode, Participant participant);
   Future<String?> fetchSessionTitle(String sessionCode);
+
+  // ── 세션 라이프사이클 ────────────────────────────────────────────────────
+  /// 교사 종료 — 세션 문서에 endedAt 기록. 학생 화면이 이 값을 구독한다.
+  Future<void> endSession(String sessionCode);
+
+  /// 학생 퇴장 — participants/{uid}.leftAt 기록. 문서는 삭제하지 않는다(누적 보존).
+  Future<void> markParticipantLeft(String sessionCode, String uid);
+
+  /// 교사가 정리한 그룹 구성 저장 — 앱 재시작 시 복원용.
+  Future<void> saveGroupSnapshot(String sessionCode, List<Group> groups);
 
   Stream<SessionState> listenToSession(String sessionCode);
   void stopListening();

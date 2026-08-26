@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/approved_group.dart';
 import '../models/group.dart';
+import '../models/group_snapshot.dart';
 import '../models/idea.dart';
 import '../models/merge_log.dart';
 import 'ai_api_client.dart';
@@ -26,6 +27,10 @@ class GeminiGroupingEngine {
   bool _frozen = false;
   VoidCallback? onGroupUpdate;
 
+  /// 그룹 구성이 바뀔 때마다 호출된다 — 호출자가 Firestore에 스냅샷으로 저장한다.
+  /// (Mercury-Session-02: 앱 재시작 시 교사의 병합·이동 결과가 사라지던 문제)
+  void Function(List<Group> groups)? onGroupsChanged;
+
   // GPT 호출 순차 처리용
   bool _calling = false;
   final _pendingBatches = <List<Idea>>[];
@@ -42,6 +47,45 @@ class GeminiGroupingEngine {
 
   List<Group>? get cachedGroups => _cachedGroups;
 
+  bool get hasCachedGroups => _cachedGroups != null;
+
+  /// Firestore 스냅샷으로 그룹 구성을 복원한다.
+  ///
+  /// 복원된 의견은 `_processedIds`에 등록해 **다시 GPT로 보내지 않는다.**
+  /// 이 표시가 없으면 `makeGroups()`가 기존 의견 전부를 버퍼에 넣어
+  /// 재그룹화를 유발하고, 교사가 정리한 구성이 그대로 덮인다.
+  ///
+  /// 스냅샷에 없는 의견(복귀 중 새로 들어온 것)은 미처리로 남아
+  /// 다음 배치에서 기존 그룹에 편입된다.
+  bool restoreSnapshot(List<GroupSnapshotEntry> snapshot, List<Idea> ideas) {
+    if (_cachedGroups != null) return false;
+    if (snapshot.isEmpty) return false;
+
+    final byId = {for (final i in ideas) i.id: i};
+    final restored = <Group>[];
+    for (final entry in snapshot) {
+      final groupIdeas =
+          entry.ideaIds.map((id) => byId[id]).whereType<Idea>().toList();
+      // 원문이 삭제된 그룹은 복원하지 않는다 — ideas 컬렉션이 단일 진실이다.
+      if (groupIdeas.isEmpty) continue;
+      restored.add(Group(
+        id: entry.groupId,
+        ideas: groupIdeas,
+        aiTitle: entry.aiTitle,
+      ));
+    }
+    if (restored.isEmpty) return false;
+
+    _cachedGroups = restored;
+    for (final g in restored) {
+      for (final i in g.ideas) {
+        _processedIds.add(i.id);
+      }
+    }
+    onGroupUpdate?.call();
+    return true;
+  }
+
   List<Group> makeGroups(List<Idea> ideas) {
     if (!_frozen) {
       for (final idea in ideas) {
@@ -52,6 +96,10 @@ class GeminiGroupingEngine {
     // 빈 텍스트 의견은 Jaccard 폴백에도 포함하지 않음
     final valid = ideas.where((i) => i.text.trim().isNotEmpty).toList();
     return _fallback.makeGroups(valid);
+  }
+
+  void _persist() {
+    onGroupsChanged?.call(_cachedGroups ?? const []);
   }
 
   void freeze() {
@@ -100,6 +148,7 @@ class GeminiGroupingEngine {
           aiTitle: newTitle);
     }).toList();
     onGroupUpdate?.call();
+    _persist();
 
     final logSources = sourceGroupObjects.map((g) {
       final approved = approvedGroups.cast<ApprovedGroup?>().firstWhere(
@@ -133,6 +182,7 @@ class GeminiGroupingEngine {
     _cachedGroups = _mergeSnapshot;
     _mergeSnapshot = null;
     onGroupUpdate?.call();
+    _persist();
   }
 
   // ideaFallback: 미분류 의견(어떤 그룹에도 없는)을 이동할 때 넘김
@@ -165,6 +215,7 @@ class GeminiGroupingEngine {
     }
     _cachedGroups = updated;
     onGroupUpdate?.call();
+    _persist();
   }
 
   void reset() {
@@ -252,6 +303,7 @@ class GeminiGroupingEngine {
       _markProcessed(batch);
       onUpdate();
       onGroupUpdate?.call();
+      _persist();
     } catch (_) {
       _markProcessed(batch);
     }

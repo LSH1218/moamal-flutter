@@ -27,7 +27,9 @@ class _MicControlScreenState extends State<MicControlScreen> {
   bool _loadingInitial = true;
   bool _allPending = false;
 
-  List<Participant> get _participants => widget.session.participants
+  // 나간 학생은 제어 대상이 아니다 (Gemini-1-Exit-01).
+  // activeParticipants가 새 리스트를 주므로 정렬이 원본을 건드리지 않는다.
+  List<Participant> get _participants => widget.session.activeParticipants
     ..sort((a, b) => a.number.compareTo(b.number));
 
   int get _offCount => _forcedMap.values.where((v) => v).length;
@@ -42,7 +44,7 @@ class _MicControlScreenState extends State<MicControlScreen> {
 
   Future<void> _loadInitialState() async {
     final map = <String, bool>{};
-    for (final p in widget.session.participants) {
+    for (final p in _participants) {
       try {
         final muted = await widget.repo
             .listenToForceStop(widget.sessionCode, p.uid)
@@ -85,12 +87,12 @@ class _MicControlScreenState extends State<MicControlScreen> {
     if (_allPending) return;
     setState(() {
       _allPending = true;
-      for (final p in widget.session.participants) {
+      for (final p in _participants) {
         _forcedMap[p.uid] = true;
       }
     });
     try {
-      for (final p in widget.session.participants) {
+      for (final p in _participants) {
         await widget.repo.forceStopMic(widget.sessionCode, p.uid);
         await widget.repo.clearForceStart(widget.sessionCode, p.uid);
       }
@@ -108,12 +110,12 @@ class _MicControlScreenState extends State<MicControlScreen> {
     if (_allPending) return;
     setState(() {
       _allPending = true;
-      for (final p in widget.session.participants) {
+      for (final p in _participants) {
         _forcedMap[p.uid] = false;
       }
     });
     try {
-      for (final p in widget.session.participants) {
+      for (final p in _participants) {
         await widget.repo.clearForceStop(widget.sessionCode, p.uid);
         await widget.repo.forceStartMic(widget.sessionCode, p.uid);
       }

@@ -45,6 +45,11 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   // Mic state
   _MicStatus _micStatus = _MicStatus.idle;
   bool _forceStopped = false;
+
+  // 교사가 수업을 종료하면(sessions/{code}.endedAt) 마이크와 제출을 잠근다
+  // (Gemini-1-Exit-03). _endedHandled는 안내 다이얼로그 1회 표시용.
+  bool _sessionEnded = false;
+  bool _endedHandled = false;
   bool _isToggleMode = false;
 
   // Pending/undo
@@ -109,6 +114,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
 
   Future<void> _handleForceStart(String uid) async {
     await _repo.clearForceStart(widget.sessionCode, uid);
+    if (_sessionEnded) return;
     // 잠금 해제는 마이크 상태와 무관하게 항상 수행한다.
     // 상태 확인을 앞에 두면 학생이 발언을 마친 done 상태에서 early-return 되어
     // 교사가 [시작]을 눌러도 잠금이 풀리지 않는다 (Mercury-3-Student-03).
@@ -162,6 +168,53 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
       });
     }
     await _repo.clearForceStop(widget.sessionCode, uid);
+  }
+
+  /// 교사 종료 감지 — 녹음·대기 중인 제출을 모두 중단하고 안내 후 랜딩으로 보낸다.
+  /// 종료 후 발언이 계속 쌓이면 리포트 데이터가 오염된다.
+  Future<void> _handleSessionEnded() async {
+    _stopVAD();
+    _undoTimer?.cancel();
+    _undoTimer = null;
+    _forceStartBannerTimer?.cancel();
+    if (_micStatus == _MicStatus.recording) {
+      await _sttClient.cancel();
+      _rippleCtrl.stop();
+      _rippleCtrl.reset();
+    }
+    if (mounted) {
+      setState(() {
+        _sessionEnded = true;
+        _micStatus = _MicStatus.idle;
+        // 확정 대기 중이던 초안은 버린다 — 종료 후 제출이 되어선 안 된다.
+        _pendingText = null;
+      });
+    }
+
+    await _markLeft();
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _SessionEndedDialog(),
+    );
+    if (!mounted) return;
+    // 종료는 정상 경로이므로 랜딩까지 되돌린다.
+    // (`나가기` 버튼의 목적지는 별건 — Gemini-1-Exit-04)
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  /// 퇴장 기록 (Gemini-1-Exit-01). 문서를 지우지 않고 leftAt만 남겨
+  /// 누적 입장자와 현재 접속자를 모두 보존한다.
+  Future<void> _markLeft() async {
+    final uid = _auth.currentUid;
+    if (uid == null) return;
+    try {
+      await _repo.markParticipantLeft(widget.sessionCode, uid);
+    } catch (_) {
+      // 퇴장 기록 실패가 학생의 이탈 자체를 막아선 안 된다.
+    }
   }
 
   @override
@@ -304,7 +357,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   // ── Gesture handlers ──────────────────────────────────────────────────────
 
   Future<void> _onTap() async {
-    if (_forceStopped) return;
+    if (_forceStopped || _sessionEnded) return;
     if (_micStatus == _MicStatus.idle || _micStatus == _MicStatus.done) {
       if (_micStatus == _MicStatus.done) {
         setState(() {
@@ -322,7 +375,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   }
 
   Future<void> _onLongPressStart() async {
-    if (_forceStopped) return;
+    if (_forceStopped || _sessionEnded) return;
     if (_micStatus != _MicStatus.idle) return;
     _isToggleMode = false;
     await _startRecording();
@@ -340,6 +393,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   }
 
   Future<void> _submitIdea(String text) async {
+    if (_sessionEnded) return;
     final idea = Idea(
       id: const Uuid().v4(),
       speaker: '학생',
@@ -351,7 +405,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
 
   Future<void> _castVote() async {
     final gid = _pendingVoteId;
-    if (gid == null || _isVoting || _myVote != null) return;
+    if (gid == null || _isVoting || _myVote != null || _sessionEnded) return;
     setState(() => _isVoting = true);
     try {
       final uid = _auth.currentUid!;
@@ -383,6 +437,13 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
         final state = snapshot.data!;
         _sessionTitle = state.title;
 
+        if (state.isEnded && !_endedHandled) {
+          _endedHandled = true;
+          // build 중에는 다이얼로그를 띄울 수 없다.
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _handleSessionEnded());
+        }
+
         // Latest teacher note → question card
         Idea? teacherNote;
         for (final idea in state.ideas.reversed) {
@@ -410,7 +471,8 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                   builder: (_) => const _ExitDialog(),
                 );
                 if ((ok ?? false) && context.mounted) {
-                  Navigator.of(context).pop();
+                  await _markLeft();
+                  if (context.mounted) Navigator.of(context).pop();
                 }
               },
               child: context.isCompact
@@ -1395,6 +1457,94 @@ class _ExitDialog extends StatelessWidget {
                   ),
                 ],
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 교사가 수업을 종료했을 때 학생에게 보이는 안내 (Gemini-1-Exit-03).
+/// 닫기 경로가 하나뿐이다 — 종료는 선택이 아니라 통보이기 때문이다.
+class _SessionEndedDialog extends StatelessWidget {
+  const _SessionEndedDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: kCardBg,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: dialogInsetH(context),
+        vertical: 24,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: kGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text(
+                    '✓',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '수업이 끝났어요',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: kInk,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '선생님이 수업을 마쳤어요. 오늘도 좋은 의견 고마워요!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                color: Colors.black54,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(
+                  color: kGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Text(
+                  '확인',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

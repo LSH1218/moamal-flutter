@@ -255,7 +255,7 @@ class _BeamProjectorScreenState extends State<BeamProjectorScreen>
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    '${_session.participants.length}',
+                    '${_session.activeParticipants.length}',
                     style: const TextStyle(
                       fontSize: 76,
                       fontWeight: FontWeight.w900,
@@ -285,7 +285,7 @@ class _BeamProjectorScreenState extends State<BeamProjectorScreen>
   // Stage 2 — 의견수집 (landscape)
   Widget _buildCollectingLandscape() {
     final submitters = _session.ideas.map((i) => i.speaker).toSet().length;
-    final total = _session.participants.length;
+    final total = _session.activeParticipants.length;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -439,7 +439,7 @@ class _BeamProjectorScreenState extends State<BeamProjectorScreen>
   Widget _buildResultsLandscape() {
     final counts = _voteCounts();
     final totalVotes = _session.votes.length;
-    final totalParticipants = _session.participants.length;
+    final totalParticipants = _session.activeParticipants.length;
 
     final sorted = [..._session.approvedGroups]
       ..sort((a, b) =>
@@ -592,7 +592,7 @@ class _BeamProjectorScreenState extends State<BeamProjectorScreen>
           textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
-              '${_session.participants.length}',
+              '${_session.activeParticipants.length}',
               style: const TextStyle(
                 fontSize: 46,
                 fontWeight: FontWeight.w900,
@@ -618,7 +618,7 @@ class _BeamProjectorScreenState extends State<BeamProjectorScreen>
   // Stage 2 — 의견수집 (portrait)
   Widget _buildCollectingPortrait() {
     final submitters = _session.ideas.map((i) => i.speaker).toSet().length;
-    final total = _session.participants.length;
+    final total = _session.activeParticipants.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),

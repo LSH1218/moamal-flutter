@@ -4,9 +4,9 @@
 
 ## 문서 정보
 
-- 마지막 갱신일: 2026-08-25
-- 갱신한 역할: Gemini QA (G1 완료 · 결함 12건 처리)
-- 기준 Flutter 커밋: `87569ce` (feat: UI 전면 재설계 + Gemini QA 진입 전 학생측 P1 3건 수정)
+- 마지막 갱신일: 2026-08-26
+- 갱신한 역할: 백엔드/Firebase (ideas 작성자 검증 추가 · S 섹션 권한 사전 점검) → Flutter 앱개발 (세션 라이프사이클 4건 일괄 구현)
+- 기준 Flutter 커밋: `2353c77` (docs: 체크리스트 G1에 실제 수행 항목 반영) + **세션 라이프사이클·권한 변경분 미커밋**
 
 ## 1. 경영 요약
 
@@ -68,6 +68,7 @@
   - `naverVerify`: 네이버 Custom Token 발급
 - **Secret Manager**: OPENAI_API_KEY (version 3, All 권한으로 재발급 2026-08-07), GEMINI_API_KEY 등록 완료
 - **Firestore 보안 규칙**: 배포 완료 (sessions, ideas, votes, approvedGroups, participants, teacher_notes, mergeLogs, openaiRateLimits, rate limit 컬렉션)
+  - ⚠️ **2026-08-26 `ideas` 규칙 변경분은 아직 미배포** — 작성자(`authorUid`) 검증 추가. 앱 새 빌드 설치 후 배포해야 함(§15)
 - **Firebase 요금제**: Blaze (종량제)
 - **Flutter UI 반응형 리팩토링 (2026-07-22)**: compact(<600)/medium(≥600) 2단계, `lib/utils/responsive.dart` 단일 진입점
 - **미완료**: 카카오/네이버 Flutter SDK 연동, App Check, 개발/운영 환경 분리, **웹 랜딩 페이지**(QR 딥링크가 `moamal://`라 앱 미설치 기기는 미대응 — Mercury-Share-01 잔여)
@@ -82,7 +83,10 @@
 | 카카오/네이버 Flutter SDK 미연동 | 중간 | Functions 준비 완료, Flutter 앱 대화방 작업 필요 | Flutter 앱 대화방에서 SDK 연동 |
 | ~~Node.js 20 지원 종료~~ | ~~중간~~ | **해결됨 2026-08-07** — Node.js 22 업그레이드 완료 | 완료 |
 | 슈퍼바이저 모드 노출 | 중간 | 랜딩 로고 3탭 → PIN 1218 | 출시 전 제거 또는 숨김 처리 |
-| 학생이 다른 의견을 수정 가능 | 높음 | `ideas`의 `create, update`가 모든 인증 사용자에게 허용 — **Gemini S-7에서 실검증, Apollo 진입 차단 조건** | 작성자 UID 검증 추가 필요 |
+| ~~학생이 다른 의견을 수정 가능~~ | ~~높음~~ | **코드 수정 완료 2026-08-26 · 배포 전** — `submitIdea()`가 `authorUid` 기록, 규칙이 작성자 검증 (`Common-Rules-01`). Gemini S-7에서 실검증, Apollo 진입 차단 조건 유지 | 새 빌드 설치 → 규칙 배포 순서 준수 (§15) |
+| 투표 종료 후에도 학생 vote 쓰기 가능 | 중간 | `votes` 규칙에 `voteOpen` 조건 없음 (`Common-Rules-02`). 오프라인 큐 쓰기가 확정 결과를 바꿀 수 있음 | 규칙안 준비됨 — Gemini QA 후 적용 (§15) |
+| `sessions` 컬렉션 전체 목록 조회 가능 | 중간 | 익명 사용자가 모든 세션 코드·제목·ownerUid 열람 가능 (`Common-Rules-03`) | list 차단 — 앱은 단건 get만 사용해 영향 없음 |
+| 학생이 교사 UID로 입장 가능 | 중간 | `signInAnonymously()`가 기존 로그인 세션을 재사용 (`Common-Auth-01`). 권한 오류 없이 잘못된 데이터가 쌓임 | QA는 앱 데이터 삭제로 회피, 근본 수정은 앱개발 방 |
 
 ## 7. 현재 우선순위
 
@@ -111,8 +115,8 @@
 - **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
-- **AI/백엔드**: App Check 적용, 개발/운영 환경 분리
-- **App 개발 (Gemini 이관, 우선)**: **학생 퇴장 처리 구현** — `Gemini-1-Exit-01`. 2026-08-25 대표 결정으로 **`leftAt` 필드 방식 확정**. 현재 나가기가 Firestore에 아무것도 쓰지 않아 교사 화면 `참여`가 줄지 않고 마이크 제어 목록에 나간 학생이 남는다. 명세는 `BUG_LOG_v2.md` Gemini-1-Exit-01 참조. **보안 규칙 변경은 불필요**(`firestore.rules:54`가 본인 문서 update를 이미 허용)
+- **AI/백엔드**: **`ideas` 규칙 배포** — 새 빌드 설치 확인 후 `firebase deploy --only firestore:rules` (§15, 순서 어기면 의견 제출 P0 회귀); Gemini S 섹션 결과 회수 후 `Common-Rules-02`(투표 종료 후 vote 쓰기)·`Common-Rules-03`(sessions list) 적용; 세션 `endedAt` 도입 후 ideas·votes 쓰기 차단 규칙 적용(§15); App Check 적용 — 익명 인증이 열려 있어 UID 단위 rate limit이 사실상 무력, 파일럿 전 필수; 개발/운영 환경 분리; rate limit 컬렉션 TTL 정책 설정 여부 콘솔 확인
+- **App 개발 (2026-08-26 완료)**: ~~학생 퇴장 처리(`Gemini-1-Exit-01`)~~ · ~~세션 종료 상태(`Gemini-1-Exit-03`)~~ · ~~그룹 구성 소실(`Mercury-Session-02`)~~ · ~~경과 시간 리셋(`Mercury-Session-03`)~~ · ~~리포트 화면 미갱신(`Mercury-Report-06`)~~ → **전부 코드 수정 완료 · 실기기 미검증**. 스키마는 §16. 예상대로 **보안 규칙 변경 없음**(세션 라이프사이클 한정 — 같은 날 백엔드 방의 `ideas`/`votes` 규칙 변경은 별건). 다음 Gemini 라운드 우선 검증 4가지: ① 학생 나가기 → 교사 `참여` 1→0 ② 교사 종료 → 학생 마이크 잠금·안내·랜딩 복귀 ③ 교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지(**신규 세션으로 테스트** — 구 세션은 `createdAt`/`groupSnapshot`이 없다) ④ 리포트 `AI 요약 생성` 즉시 반영. **주의**: 실제 세션 종료는 하단 독 kRed `종료`(리포트 화면으로 이동할 뿐)가 아니라 **뒤로가기 → 다이얼로그 → `종료`** 경로다 — 라벨·동작 불일치는 UI/UX 방 결정 사항으로 남겨둠
 - **App 개발**: ~~`flutter analyze` 후 오류 수정~~ → 2026-08-25 실행, **오류 0건**(경고·info 11건: 미사용 선언 4, 스타일 7);
   Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 → Gemini G6;
   **미해결 P1** — Mercury-Report-06(리포트 화면 미갱신), Mercury-Session-02(재시작 시 병합·승인 결과 소실), Mercury-4-Organize-01(승인 취소 확인 다이얼로그).
@@ -120,12 +124,14 @@
   **잠재 재발 지점**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의 `?? repo.listenToSession(...)` 폴백 —
   현재 호출부가 항상 `sessionStream`을 넘겨 미발현이나, 넘기지 않는 호출부가 생기면 Mercury-3-Student-01이 재발
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 — **Gemini에서 구체화됨(2026-08-25)**: ① 세션에 종료 상태 자체가 없어 교사가 종료해도 학생이 계속 발언 가능(`Gemini-1-Exit-03`), ② 퇴장 처리 미구현(`Gemini-1-Exit-01`, leftAt 방식 확정), ③ 참여자 정의 미확정(`Mercury-Report-05`), ④ 경과 시간 리셋(`Mercury-Session-03`) — 네 개가 한 덯어리; 수업 시간 타이머 서브 화면 진입 시 동작 정의; **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
-- **Flutter UI/UX (반응형)**: 반응형 미적용 — `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`. **`facilitator_tab`·`student_tab`·`display_tab`(합 1,129줄)은 UI 재설계 후 어느 화면에서도 참조되지 않는 사재 코드**(2026-08-25 확인) — QA 순회 대상에서 제외, 삭제 여부는 앱개발 방 판단. `student_tab`에 있던 **교사 수동 의견 입력 UI도 함께 끊겼다** — 현재 의견 생성 경로는 STT 단일이다. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
+- **Flutter UI/UX (반응형)**: 반응형 미적용 — `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`. ~~`facilitator_tab`·`student_tab`·`display_tab`(합 1,129줄) 사재 코드~~ → **2026-08-26 삭제 완료**(`Mercury-Redesign-01`, 앱개발 방). 다만 `student_tab`에 있던 **교사 수동 의견 입력 UI가 끊긴 것은 그대로 미해결**이다 — 삭제로 사라진 게 아니라 재설계 시점에 이미 끊겨 있었고, 현재 의견 생성 경로는 STT 단일이다. 복원 여부는 전략기획 판단. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
 
 ## 9. 최근 변경 기록
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-26 | App 개발 | **세션 라이프사이클 4건 일괄 구현** (§16 신설). `Gemini-1-Exit-03` — `sessions.endedAt` 신설, 교사 종료 시 기록(`voteOpen: false` 동반), 학생 화면이 구독해 마이크·제출·투표 잠금 후 안내 → 랜딩 복귀. `Gemini-1-Exit-01` — `Participant.leftAt`·`isActive`·`SessionState.activeParticipants` 추가, `markParticipantLeft()` 신설(문서 삭제 아님), 나가기·종료 양쪽에서 호출, 사용처를 **접속 중**(LIVE 타일·빔프로젝터·마이크 제어·투표율 분모)과 **누적**(리포트)으로 분리. `Mercury-Session-02` — `models/group_snapshot.dart` 신설, 그룹 구성을 세션 문서 `groupSnapshot` **필드**에 저장(하위 컬렉션이 아니라 필드 → 보안 규칙 변경 불필요), `GeminiGroupingEngine.onGroupsChanged`(변경 4지점)·`restoreSnapshot()` 추가, 복원 의견을 `_processedIds`에 등록해 재그룹화 차단. `Mercury-Session-03` — `sessions.createdAt` 기준 경과 시간. `Mercury-Report-06` — `ReportScreen` StatefulWidget 전환, `onGenerateReport`가 `Future<MeetingReport?>` 반환. **정리**: `tabs/` 사재 코드 3개(1,129줄) 삭제(`Mercury-Redesign-01`), `organize_screen`·`cluster_vote_screen`의 `?? repo.listenToSession(...)` 폴백 제거 후 `sessionStream` required화(`Mercury-3-Student-01` 재발 지점 봉쇄). 테스트 12건 추가(총 18건 통과), `flutter analyze` 오류 0 · 경고/info 10 |
+| 2026-08-26 | 백엔드/Firebase | `firestore.rules` `ideas` 작성자 검증 추가 — `create`는 `authorUid == auth.uid`, `update`는 교사 또는 작성자 본인만(`authorUid` 변경 금지). `firebase_moamal_repository.dart` `submitIdea()`가 `authorUid` 기록(의견 쓰기 경로가 단일이라 레포지터리에서 채움). **미배포** — 새 빌드 설치 후 배포. Gemini S 섹션 사전 점검으로 `Common-Rules-02`(투표 종료 후 vote 쓰기 가능)·`Common-Rules-03`(sessions list 개방)·`Common-Rules-04`(학생이 votes 집계 불가)·`Common-Auth-01`(익명 로그인이 교사 세션 재사용) 신규 기록. 권한 계약을 §15로 신설 |
 | 2026-08-25 | Gemini QA | **G1(학생 진입) 실기기 완료** — 공기계(학생) + 에뮬(교사) 2기기. **결함 12건 발견 · 9건 수정 · 3건 설계 이관.** 수정: 랜딩 QR 버튼 스캐너 직행, 320dp 코드 입력 레이아웃(제목 3줄→2줄), QR 스캔 실패 대안(8초 힌트·errorBuilder), `다음` 버튼 제거·6자리 자동 확인, 딥링크 화면 중복 스택, 입력칸 테두리 겹침(테마 focusedBorder), 버튼 폭 축소(Column center), 나가기 다이얼로그 세로 배치. **참여자 카운트가 처음으로 0이 아닌 값(1)을 표시** — Mercury 내내 검증 불가했던 경로가 열림. 플랫폼 제약 확인: 삼성 기본 카메라가 커스텀 스킴을 무시해 1-3은 웹 럜딩 없이 달성 불가. 설계 이관 3건은 모두 **세션 라이프사이클**로 수렴(Exit-01 leftAt 확정, Exit-03 종료 상태 부재, Exit-04 문구 불일치) |
 | 2026-08-25 | Gemini QA | **Gemini QA 준비 완료.** `gemini_qa.html` 신규 작성 (항목 90개, `mercury_qa.html` 형식) — 진행 순서를 CORE(G0~G4·S) → ROLE SWAP(G7) → STABILITY(G6) → EXTENDED(G5·G8) → REGRESSION(GR)으로 분리하고, 핵심 PASS를 공기계1+에뮬1의 1:1 양방향 E2E로, 단일 마일스톤을 G4-3(학생 실투표 → 교사 득표 바 실시간 갱신)으로 확정. **S 섹션 신설** — Firestore 보안 규칙 실검증 9항목(S-2·S-7·S-8은 Apollo 진입 차단 조건). 장비 실측: 교사 Pixel_6 AVD(`google_apis`/API 34/411dp), 학생 SM-A305N(API 30/320dp). **PC 물리 마이크 없음** 확인 → 에뮬 STT 불가, 1라운드=학생 STT · G7=교사 STT로 분담해 양쪽 다 실기기 검증. 신규 **Mercury-Redesign-01**: 구 탭 3종(`facilitator_tab`·`student_tab`·`display_tab`, 합 1,129줄)이 사재 코드로 확인 — G8 순회 대상과 Mercury-Report-07 범위 정정, **교사 수동 의견 입력 UI가 대체 없이 소실되어 현재 의견 생성 경로는 STT 단일**임을 기록 |
 | 2026-08-25 | Gemini QA 선수정 | **Gemini 진입 전 학생측 P1 3건 수정**(실기기 미검증). ① `student_session_screen.dart`: `listenToSession()`을 `build()`→`initState`로 이관, `_sessionStream` 필드 신설 — setState마다 Firestore 5개 구독이 끊겼다 재생성되던 문제(Mercury-3-Student-01). ② QR 딥링크(Mercury-Share-01): `deep_link_service.dart`에 `buildJoinUri()`/`parseScanned()` 추가, QR 생성 6곳을 `moamal://join/{code}`로 교체, **앱 내 스캐너의 `length==6` 판정도 함께 교체**(안 하면 기존 QR 참여가 깨짐). `main.dart` 수신 경로도 수정 — 이름 입력 화면 건너뛰던 것을 `StudentProfileScreen` 경유로, 세션 존재 확인 추가, `pushReplacement`→`push`, `codeStream()` 구독을 분기 앞으로 이동. ③ `_handleForceStart()`: 잠금 해제를 early-return 앞으로 이동 — 발언 완료(`done`) 학생은 교사가 [시작]을 눌러도 마이크가 영구 잠기던 문제(Mercury-3-Student-03, **P2→P1 상향**). `flutter analyze` 신규 오류 0건 |
@@ -386,3 +392,151 @@ sessions/{sessionCode}/approvedGroups/{groupId}
 | 그룹화 max_completion_tokens | 1024 |
 | 브리핑 max_completion_tokens | 512 |
 | 리포트 max_completion_tokens | 1024 |
+
+---
+
+## 15. Firestore 권한 계약 (클라이언트 기준, 2026-08-26)
+
+> 규칙 문법이 아니라 **실제 클라이언트가 무엇을 할 수 있는가** 기준으로 정리한다.
+> Gemini QA S 섹션(S-2 approvedGroups · S-7 ideas · S-8 votes · S-9 participants)의 기대값이다.
+
+### 주체별 권한
+
+| 컬렉션 | 교사(세션 소유자) | 본인 학생 | 다른 학생 · 미참여 익명 사용자 |
+|---|---|---|---|
+| `sessions/{code}` | 읽기·수정·삭제 | 읽기만 | 읽기만 — **단 컬렉션 전체 list도 가능**(`Common-Rules-03`) |
+| `ideas` (S-7) | 생성·읽기·수정·삭제 | 생성(본인 `authorUid`)·읽기·본인 것 수정 | 읽기만 — **수정 불가**(2026-08-26 수정, 배포 전) |
+| `approvedGroups` (S-2) | 생성·수정·삭제 | 읽기만 ✅ | 읽기만 ✅ |
+| `votes` (S-8) | 전체 읽기·삭제 | 본인 문서 생성·수정·읽기 | 타인 투표 읽기·쓰기 모두 불가 ✅ / **투표 종료 후에도 본인 쓰기는 가능**(`Common-Rules-02`) |
+| `participants` (S-9) | 전체 읽기·수정·삭제 | 본인 문서 생성·수정·읽기 (`leftAt` 포함) | 타인 문서 접근 불가 ✅ |
+| `teacher_notes` | 생성·수정·삭제 | 읽기만 ✅ | 읽기만 ✅ |
+| `mergeLogs` | 읽기·쓰기 | 접근 불가 ✅ | 접근 불가 ✅ |
+
+S-2 · S-9는 규칙·클라이언트 양쪽에서 정상이다. S-7은 이번에 수정했고, S-8은 "타인 투표 조작 불가"는 정상이나 **투표 개폐 조건이 없다**는 별도 결함이 있다.
+
+`leftAt`(학생 퇴장)과 `groupSnapshot`(그룹 구성 저장)은 **규칙 변경이 불필요하다.**
+전자는 본인 participants 문서 update, 후자는 교사 전용 sessions 문서 update로 이미 허용된다.
+
+학생 기기는 `votes`·`participants` 컬렉션을 목록 조회할 수 없다. 레포지터리가 이 권한 오류를 빈 값으로 삼키므로 오류는 보이지 않지만, 학생 화면의 득표 집계가 항상 0이 된다(`Common-Rules-04`).
+
+### `ideas` 규칙 배포 순서 (중요)
+
+규칙은 배포 즉시 **모든 클라이언트**에 적용된다. `authorUid`를 쓰지 않는 구 빌드는 의견 제출이 전부 거부되므로(P0 회귀) 순서를 지켜야 한다.
+
+1. 새 빌드를 QA에 쓰는 **두 기기 모두** 설치
+2. 규칙 배포
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+3. 배포 후 학생 기기에서 의견 1건 제출 → Firestore 문서에 `authorUid` 필드가 생겼는지 확인
+4. 실패하면 콘솔 Firestore → 사용량/규칙 탭에서 거부 건을 확인하고 즉시 이전 규칙 버전으로 롤백
+
+기존 의견 문서(`authorUid` 없음)는 읽기·삭제가 그대로이고, 수정만 교사로 제한된다.
+
+### 세션 종료(`endedAt`) 이후 쓰기 차단 — 판단
+
+**규칙으로 막는 것을 권장한다.** 클라이언트 가드만으로는 ① 백그라운드에 있던 학생 앱의 지연 쓰기, ② 오프라인 큐가 종료 후 도달하는 경우, ③ 구 빌드를 막을 수 없다. 다만 학생에게 즉시 피드백을 주려면 **클라이언트 가드도 함께** 두어야 한다 — 규칙이 권위, 클라이언트는 UX다.
+
+적용 시점은 **`endedAt` 클라이언트 구현이 Gemini QA에서 확인된 후**다. 지금 넣으면 QA 핵심 경로에 새 거부 조건이 생긴다.
+
+```
+function sessionOpen(sessionCode) {
+  return get(/databases/$(database)/documents/sessions/$(sessionCode))
+         .data.get('endedAt', null) == null;
+}
+```
+
+- `ideas`의 `create`에 `&& (isOwner(sessionCode) || sessionOpen(sessionCode))` 추가
+- `votes`의 `create, update`에 동일 조건 추가 (`Common-Rules-02`의 `voteOpen` 조건과 한 번에 처리하면 규칙 내부 읽기 1회로 끝난다)
+- `data.get('endedAt', null)`을 쓰는 이유: 이 필드가 없는 기존 세션 문서에서 규칙이 오류로 거부되는 것을 막기 위함
+- 비용: 의견·투표 쓰기 1건당 규칙 내부 문서 읽기 1회 (학급 25명 기준 수십 read, 무시 가능)
+- 교사는 종료 후에도 기록을 정리할 수 있어야 하므로 `isOwner` 예외를 둔다
+
+---
+
+## 16. 세션 라이프사이클 스키마 계약 (2026-08-26)
+
+> `Gemini-1-Exit-01`·`Gemini-1-Exit-03`·`Mercury-Session-02`·`Mercury-Session-03`은
+> 서로 다른 증상이지만 **원인이 하나**다 — 세션에 "시작·진행·종료"라는 상태 개념이 없었다.
+> 네 건을 한 번에 설계했고, 이 절이 그 계약이다.
+
+### 세션 문서
+
+```
+sessions/{sessionCode}
+  createdAt: Timestamp     - 세션 생성 시각. 수업 경과 시간의 기준 (Mercury-Session-03)
+  endedAt:   Timestamp?    - 교사 종료 시각. null이면 진행 중 (Gemini-1-Exit-03)
+  groupSnapshot: [         - 교사가 정리한 그룹 구성 (Mercury-Session-02)
+    { groupId: String, aiTitle: String?, ideaIds: String[] }, ...
+  ]
+  groupSnapshotAt: Timestamp
+```
+
+- `createdAt`은 `publishSession()`에서만 쓴다. 세션 **생성 경로에서만** 호출되므로 값이 덮이지 않는다.
+  복귀(`existingCode`)는 `publishSession`을 타지 않는다.
+- `endSession()`은 `endedAt`과 함께 `voteOpen: false`를 쓴다 — 종료된 수업에 투표가 열린 채 남지 않게 한다.
+- **`groupSnapshot`이 하위 컬렉션이 아니라 필드인 이유**: `sessions` update가 이미 교사 전용이라
+  보안 규칙 추가·재배포 없이 동작한다. 대가로 학생도 이 필드를 함께 내려받는다(수 KB 수준, 파일럿까지 감수).
+- 스냅샷은 **의견 본문이 아니라 id만** 담는다. 원문의 단일 진실은 `ideas` 하위 컬렉션이고,
+  스냅샷은 배치 정보만 책임진다 — `approvedGroups.idea_ids`와 같은 계약이다.
+
+### participants 문서
+
+```
+sessions/{sessionCode}/participants/{uid}
+  leftAt: Timestamp?   - 학생이 명시적으로 `나가기`를 누른 시각. null이면 접속 중
+```
+
+- 퇴장 시 **문서를 삭제하지 않는다.** 누적 입장자와 현재 접속자를 모두 보존하기 위함이다.
+- `Participant.toFirestore()`가 `'leftAt': null`을 **명시적으로 포함**한다 —
+  재입장 시 `joinSession()`의 merge set만으로 퇴장 표시가 자동 해제된다.
+- **한계**: 명시적 `나가기`만 감지한다. 앱 강제 종료·백그라운드 장기 이탈은 잡히지 않는다.
+  완전한 접속 상태가 필요하면 heartbeat(`lastSeenAt` 주기 갱신)가 별도로 필요하며 쓰기 비용이 늘어난다 — 파일럿 이후 판단.
+
+### 참여자 수치의 두 가지 의미
+
+| 의미 | 접근자 | 사용처 |
+|---|---|---|
+| **접속 중** | `SessionState.activeParticipants` | 교사 LIVE 통계 타일, `beam_projector_screen`, `mic_control_screen`(로스터·전체 음소거/해제), `organize_screen` 투표율 분모 |
+| **누적 입장** | `SessionState.participants` | 리포트 — 단 리포트 수치는 아직 `votes`/`ideas` 기반이며 `Mercury-Report-05`(참여자 정의) 결정 전까지 손대지 않았다 |
+
+### 종료 시 동작 순서
+
+```
+교사: 뒤로가기 → 종료 확인 다이얼로그 → endSession()
+                                          ↓ (세션 스트림)
+학생: isEnded 수신 → VAD·녹음·되돌리기 타이머 중단
+                   → 확정 대기 초안 폐기 (종료 후 제출은 리포트를 오염시킨다)
+                   → 마이크·제출·투표·forceStart 수신 잠금
+                   → markParticipantLeft()
+                   → 안내 다이얼로그 → 랜딩 복귀
+```
+
+- 종료 후 `ideas` 쓰기 차단은 **클라이언트 잠금만** 적용했다. 규칙으로 막으려면 `ideas` create에
+  세션 문서 `get()`이 필요해 의견 1건마다 읽기가 발생한다. 악의적 우회가 아니라 실수 방지가 목적이므로
+  클라이언트로 충분하다고 판단했다 — 필요 시 백엔드 방 별건.
+- 교사 하단 독의 kRed `종료` 버튼은 **여전히 리포트 화면으로 갈 뿐 세션을 끝내지 않는다.**
+  라벨과 동작의 불일치는 UI/UX 방 결정 사항.
+
+### 그룹 스냅샷 복원 순서 (깨지기 쉬운 지점)
+
+```
+세션 스트림 emit
+  → restoreSnapshot(state.groupSnapshot, state.ideas)   ← 반드시 먼저
+  → makeGroups(state.ideas)
+```
+
+`restoreSnapshot()`은 복원한 의견을 `_processedIds`에 등록한다. 이 표시가 없으면 `makeGroups()`가
+기존 의견 전부를 버퍼에 넣어 AI 재그룹화를 유발하고, 교사가 정리한 구성이 그대로 덮인다.
+**호출 순서가 뒤바뀌면 수정 자체가 무효가 된다.**
+
+저장 루프는 발생하지 않는다 — 스냅샷 저장 → 세션 문서 변경 → 리스너 재진입 시
+`_cachedGroups != null`이라 `restoreSnapshot()`이 즉시 false를 반환하고, `makeGroups()`는
+캐시를 그대로 돌려주어 추가 쓰기가 없다.
+
+### 마이그레이션
+
+이 변경 이전에 만들어진 세션에는 `createdAt`·`groupSnapshot`이 없다. 각각 기존 동작
+(앱 실행 시각 기준 / AI 재그룹화)으로 폴백하므로 깨지지는 않지만, **검증은 새 세션으로 해야 한다.**

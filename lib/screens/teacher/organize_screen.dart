@@ -12,7 +12,10 @@ import 'package:provider/provider.dart';
 
 class OrganizeScreen extends StatefulWidget {
   final String sessionCode;
-  final Stream<SessionState>? sessionStream;
+  /// 교사 홈이 만든 broadcast 스트림을 그대로 받는다. **필수**이다 —
+  /// 화면이 직접 listenToSession()을 부르면 리포지터리가 기존 구독을 끊고
+  /// 새로 만들기 때문에 build마다 재구독이 발생한다 (Mercury-3-Student-01).
+  final Stream<SessionState> sessionStream;
   final SessionState? initialSession;
   final List<Group> groups;
   final FirebaseMoamalRepository repo;
@@ -21,7 +24,7 @@ class OrganizeScreen extends StatefulWidget {
   const OrganizeScreen({
     super.key,
     required this.sessionCode,
-    this.sessionStream,
+    required this.sessionStream,
     this.initialSession,
     required this.groups,
     required this.repo,
@@ -63,8 +66,7 @@ class _OrganizeScreenState extends State<OrganizeScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<SessionState>(
-      stream: widget.sessionStream ??
-          widget.repo.listenToSession(widget.sessionCode),
+      stream: widget.sessionStream,
       initialData: widget.initialSession,
       builder: (context, snapshot) {
         final session = snapshot.data;
@@ -1306,7 +1308,8 @@ class _VoteTabState extends State<_VoteTab> {
   Widget build(BuildContext context) {
     final session = widget.session;
     final approved = session.approvedGroups;
-    final totalParticipants = session.participants.length;
+    // 투표율 분모는 접속 중인 학생 — 나간 학생은 투표할 수 없다 (Gemini-1-Exit-01)
+    final totalParticipants = session.activeParticipants.length;
     final votedCount = session.votes.length;
     final notVotedCount =
         totalParticipants > votedCount ? totalParticipants - votedCount : 0;

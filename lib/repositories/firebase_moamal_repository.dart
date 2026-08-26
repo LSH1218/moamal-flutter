@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/approved_group.dart';
+import '../models/group.dart';
+import '../models/group_snapshot.dart';
 import '../models/idea.dart';
 import '../models/merge_log.dart';
 import '../models/participant.dart';
@@ -41,6 +44,10 @@ class FirebaseMoamalRepository implements MoamalRepository {
       'voteOpen': state.voteOpen,
       'sessionType': state.sessionType,
       'updatedAt': FieldValue.serverTimestamp(),
+      // 세션 생성 시점에만 호출되는 경로이므로 여기서 기준 시각을 확정한다.
+      // 복귀(existingCode)는 publishSession을 타지 않아 값이 덮이지 않는다.
+      'createdAt': FieldValue.serverTimestamp(),
+      'endedAt': null,
       if (state.ownerUid != null) 'ownerUid': state.ownerUid,
     };
     await _sessionRef(state.sessionCode).set(data, SetOptions(merge: true));
@@ -48,11 +55,18 @@ class FirebaseMoamalRepository implements MoamalRepository {
 
   @override
   Future<void> submitIdea(String sessionCode, Idea idea) async {
+    // authorUid는 Firestore 규칙이 작성자 검증에 사용한다.
+    // 의견 쓰기 경로가 이 메서드 하나뿐이라 여기서 채워야 누락이 생기지 않는다.
+    final authorUid = FirebaseAuth.instance.currentUser?.uid;
+    if (authorUid == null) {
+      throw StateError('로그인 후에만 의견을 제출할 수 있습니다.');
+    }
     await _sessionRef(sessionCode)
         .collection('ideas')
         .doc(idea.id)
         .set({
       ...idea.toFirestore(),
+      'authorUid': authorUid,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -110,11 +124,40 @@ class FirebaseMoamalRepository implements MoamalRepository {
   }
 
   @override
+  Future<void> endSession(String sessionCode) async {
+    await _sessionRef(sessionCode).set({
+      'endedAt': FieldValue.serverTimestamp(),
+      'voteOpen': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  // 그룹 구성을 세션 문서 필드로 저장한다.
+  // 하위 컬렉션이 아니라 필드인 이유: sessions update는 이미 교사 전용이라
+  // 보안 규칙 추가·재배포 없이 동작한다.
+  @override
+  Future<void> saveGroupSnapshot(String sessionCode, List<Group> groups) async {
+    await _sessionRef(sessionCode).set({
+      'groupSnapshot':
+          groups.map((g) => GroupSnapshotEntry.fromGroup(g).toMap()).toList(),
+      'groupSnapshotAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
   Future<void> joinSession(String sessionCode, Participant participant) async {
     await _sessionRef(sessionCode)
         .collection('participants')
         .doc(participant.uid)
         .set(participant.toFirestore(), SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> markParticipantLeft(String sessionCode, String uid) async {
+    await _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .set({'leftAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
   }
 
   @override
@@ -375,6 +418,12 @@ class FirebaseMoamalRepository implements MoamalRepository {
             .toList()
           ..sort((a, b) => a.number.compareTo(b.number)));
 
+    final snapshotRaw = data?['groupSnapshot'] as List<dynamic>? ?? const [];
+    final groupSnapshot = snapshotRaw
+        .map((e) => GroupSnapshotEntry.fromMap(e as Map<String, dynamic>))
+        .where((e) => e.groupId.isNotEmpty)
+        .toList();
+
     return SessionState(
       sessionCode: data?['sessionCode'] as String? ?? '',
       title: data?['title'] as String? ?? '',
@@ -385,6 +434,9 @@ class FirebaseMoamalRepository implements MoamalRepository {
       votes: votes,
       approvedGroups: approvedGroups,
       participants: participants,
+      createdAt: (data?['createdAt'] as Timestamp?)?.toDate(),
+      endedAt: (data?['endedAt'] as Timestamp?)?.toDate(),
+      groupSnapshot: groupSnapshot,
     );
   }
 }

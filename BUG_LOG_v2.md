@@ -92,7 +92,14 @@
   - 또는 `ValueListenableBuilder` / 상태 관리 객체를 전달해 부모 상태 변화를 구독
   - 또는 `onGenerateReport`를 `Future<MeetingReport?>`를 반환하도록 바꿔 ReportScreen이 결과를 직접 받아 setState
 - **검증**: 2026-08-24 — 생성 후 재진입 시 요약 정상 표시(`제목 → 핵심 인용`), 상단 저장/공유 활성화, 공유 시트에 리포트 본문 노출 확인. 생성 자체는 성공
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26): 위 세 번째 안 채택. `ReportScreen`을 `StatefulWidget`으로 전환하고
+  `onGenerateReport`의 타입을 `VoidCallback` → `Future<MeetingReport?> Function()`으로 변경.
+  화면이 생성 결과를 **반환값으로 직접 받아** 자기 `setState`로 갱신한다.
+  `_isGenerating`도 화면 로컬 상태가 되어 버튼이 즉시 "생성 중..."으로 바뀐다.
+  부모(`TeacherHomeScreen._generateReport`)도 기존대로 `_meetingReport`를 갱신하므로 재진입 시 결과가 유지된다.
+  실패 시 `null`이 오며 이때는 기존 리포트를 지우지 않는다
+- **파일**: `lib/screens/teacher/report_screen.dart`, `lib/screens/teacher/teacher_home_screen.dart` — `_generateReport()`
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
 
 ### [Mercury-Session-02] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 앱 재시작(핫 리스타트 포함) 후 세션에 복귀하면 **교사가 수행한 그룹 병합·이동·승인 결과가 모두 사라지고** AI가 처음부터 다시 그룹화함.
@@ -103,7 +110,25 @@
 - **등급**: **P1** — 교사가 수업 내내 정리한 결과를 앱이 한 번 죽으면 전부 잃는다. `active_teacher_session` 복귀 기능의 의미가 반감됨
 - **수정 방향**: 그룹 구성(`groupId → ideaIds`, `aiTitle`)을 Firestore에 스냅샷으로 저장하고 복귀 시 복원.
   `mergeLogs` 스키마 작업과 함께 설계하는 것이 합리적
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26):
+  - `models/group_snapshot.dart` 신설 — `GroupSnapshotEntry{groupId, aiTitle, ideaIds}`.
+    `Group`과 달리 **의견 본문이 아니라 id만** 저장한다. 원문의 단일 진실은 `ideas` 하위 컬렉션이고
+    스냅샷은 "어느 의견이 어느 그룹에 속하는가"만 책임진다 (`approvedGroups.idea_ids`와 같은 계약)
+  - **저장 위치는 하위 컬렉션이 아니라 세션 문서 필드** `groupSnapshot`.
+    `sessions` update가 이미 교사 전용이라 **보안 규칙 추가·재배포 없이 동작**하기 때문이다(백엔드 방 의존 제거).
+    대가로 학생도 이 필드를 함께 내려받는다 — 수 KB 수준이라 파일럿까지는 감수
+  - `GeminiGroupingEngine.onGroupsChanged` 콜백 신설 → 그룹이 바뀌는 **4개 지점 전부**
+    (`_applyResult`·`moveIdea`·`mergeGroups`·`undoMerge`)에서 호출. `TeacherHomeScreen`이 받아 Firestore에 저장
+  - `restoreSnapshot()` 신설 — 복원한 의견을 `_processedIds`에 등록하는 것이 **핵심**이다.
+    이 표시가 없으면 `makeGroups()`가 기존 의견 전부를 버퍼에 넣어 재그룹화를 유발하고 복원 결과가 그대로 덮인다.
+    스냅샷에 없는 의견(복귀 중 새로 들어온 것)은 미처리로 남아 다음 배치에서 기존 그룹에 편입된다
+  - 호출 순서: 스트림 리스너에서 `restoreSnapshot()` → `makeGroups()`. **뒤바뀌면 수정이 무효가 된다**
+- **저장 루프 없음**: 스냅샷 저장 → 세션 문서 변경 → 리스너 재진입 시 `_cachedGroups != null`이므로
+  `restoreSnapshot()`이 즉시 false를 반환하고, `makeGroups()`는 캐시를 그대로 돌려주어 추가 쓰기가 발생하지 않는다
+- **테스트**: `test/group_snapshot_restore_test.dart` 6건 — 복원·재그룹화 차단·중복 복원 방지·원문 삭제 그룹 제외·빈 스냅샷·저장 콜백
+- **파일**: `lib/models/group_snapshot.dart`, `lib/services/gemini_grouping_engine.dart`,
+  `lib/repositories/*` (`saveGroupSnapshot`), `lib/screens/teacher/teacher_home_screen.dart`
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지 확인 필요)
 
 ### [Mercury-Session-03] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 앱 재시작 후 리포트의 "수업 N분" 경과 시간이 리셋됨. QA 중 39:29 → 02:05로 초기화
@@ -111,7 +136,15 @@
   `existingCode`로 기존 세션에 복귀해도 Firestore의 세션 생성 시각을 쓰지 않음
 - **등급**: P2 — 교사가 학교에 제출하는 리포트 수치이므로 신뢰도 문제 (Mercury-Report-05와 동일 성격)
 - **수정 방향**: 세션 문서에 `createdAt`을 저장하고 복귀 시 그 값을 `_sessionStart`로 사용
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26): `publishSession()`이 `createdAt: serverTimestamp()`를 기록한다.
+  세션 **생성 경로에서만** 호출되므로 값이 덮이지 않는다 — 복귀(`existingCode`)는 `publishSession`을 타지 않는다.
+  `SessionState.createdAt`을 추가하고, 스트림이 값을 물어오면 `_sessionStart`를 그 값으로 교체한다.
+  `late DateTime _sessionStart`는 스트림이 먼저 도착해도 안전하도록 `DateTime.now()` 초기값을 갖는 일반 필드로 바꿨다
+- **파일**: `lib/models/session_state.dart`, `lib/repositories/firebase_moamal_repository.dart`,
+  `lib/screens/teacher/teacher_home_screen.dart`
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
+- **한계**: 이번 수정 이전에 만들어진 세션은 `createdAt`이 없어 기존 동작(앱 실행 시각 기준)으로 폴백한다.
+  검증은 **새 세션**으로 해야 한다
 
 ### [Mercury-Share-01] ← Section R 회귀 체크 중 발견 (2026-08-24)
 - **현상**: QR 코드에 딥링크가 아닌 **평문 세션 코드**만 인코딩됨. 학생이 폰 카메라로 QR을 스캔해도 앱이 열리지 않고 "KBZ5A2" 같은 텍스트만 표시됨 → 결국 코드를 수동 입력해야 하므로 QR의 기능이 사실상 없음
@@ -173,7 +206,13 @@
   - 사재 파일 3개 삭제 또는 `legacy/`로 격리 (앱개발 방)
   - 인수인계 문서·`Mercury-Report-07` 범위 정정 → **2026-08-25 반영 완료**
   - 교사/학생 수동 텍스트 입력 복원 여부 → 전략기획 판단
-- **상태**: 🟡 문서 정정 완료 · 코드 정리와 수동 입력 복원은 미결정
+- **수정** (2026-08-26): `lib/screens/teacher/tabs/` 3개 파일 **삭제**. 격리가 아니라 삭제를 택한 이유는
+  git 이력에 남아 있어 복원이 가능하고, 남겨두면 QA·버그 로그가 계속 오염되기 때문이다.
+  삭제로 `display_tab` unused import 경고도 함께 사라져 `flutter analyze` 경고가 11 → 10건이 됐다
+- **남은 항목**: **파급 3(교사 수동 의견 입력 UI 소실)은 그대로 미해결**이다.
+  삭제로 사라진 것이 아니라 재설계 시점에 이미 끊겨 있었다. 현재 `ideas` 생성 경로는 STT 단일이며,
+  복원 여부는 전략기획 판단 사항으로 남는다
+- **상태**: 🟡 코드 정리 완료 (2026-08-26) · **수동 입력 복원은 미결정**
 
 ### [Mercury-Vote-01] ← Section R 회귀 체크 중 발견 (2026-08-24)
 - **현상**: 득표수가 동점인데 한 그룹만 1위(kYellow)로 강조됨. QA 중 두 그룹 모두 1표·50%인 상태에서
@@ -245,8 +284,10 @@
 - **등급**: P1
 - **수정** (2026-08-25, Gemini 선수정): `_sessionStream` 필드 신설 → `initState`에서 `_repo.listenToSession()` 1회 호출 후 저장,
   `StreamBuilder(stream: _sessionStream)`으로 전달. TeacherHomeScreen과 동일 패턴
-- **남은 위험**: `organize_screen.dart:67`과 `cluster_vote_screen.dart:152`에 `widget.sessionStream ?? widget.repo.listenToSession(...)`
-  폴백이 있다. 현재는 호출부가 항상 `sessionStream`을 넘겨서 발현하지 않지만, 넘기지 않는 호출부가 생기면 같은 버그가 재발한다
+- **~~남은 위험~~ → 제거 완료 (2026-08-26)**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의
+  `widget.sessionStream ?? widget.repo.listenToSession(...)` 폴백을 삭제하고 `sessionStream`을
+  **nullable → required**로 바꿨다. 이제 스트림을 넘기지 않는 호출부는 **컴파일 자체가 되지 않아**
+  같은 버그가 재발할 수 없다. `_goToSummary()`에는 `_goToProjector()`와 같은 `_sessionStream == null` 가드를 추가했다
 - **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (Gemini G2·G4에서 확인)
 
 ### [Mercury-3-Student-02] ← 재설계 후 발견
@@ -503,7 +544,20 @@
      - **누적**: 리포트 참여자 수
 - **한계 (명시해 둘 것)**: 명시적 `나가기`만 감지한다. 앱 강제 종료·백그라운드 장기 이탈은 잡히지 않는다.
   완전한 접속 상태가 필요하면 heartbeat(주기적 `lastSeenAt` 갱신)가 별도로 필요하며, 이는 Firestore 쓰기 비용이 늘어난다 — 파일럿 이후 판단
-- **상태**: 🟡 결정 완료 · **구현 대기** (앱개발 방)
+- **구현 완료** (2026-08-26, 앱개발 방) — 명세대로 1~5 전부:
+  1. `Participant.leftAt` + `isActive`. `toFirestore()`에 `'leftAt': null`을 **명시적으로 포함** —
+     재입장 시 `joinSession()`의 merge set만으로 퇴장 표시가 자동 해제된다
+  2. `SessionState.activeParticipants` — `participants`는 누적, 이쪽이 접속 중
+  3. `markParticipantLeft(sessionCode, uid)` — 문서를 **삭제하지 않고** `leftAt`만 merge set
+  4. `_ExitDialog` 확인 후 `Navigator.pop()` **전에** 호출. 교사 종료로 이탈할 때도 같은 경로를 탄다
+  5. 호출부 분리 — **접속 중**(`activeParticipants`): 교사 LIVE 통계 타일 2곳, `beam_projector_screen` 5곳,
+     `mic_control_screen` 로스터 + 전체 음소거/해제 대상, `organize_screen:1309` 투표율 분모.
+     **누적**(`participants`): 리포트 — 단 리포트의 참여자 수치는 아직 `votes`/`ideas` 기반이라
+     `Mercury-Report-05` 결정 전까지 손대지 않았다
+  - 퇴장 기록 실패는 예외를 삼킨다 — 학생의 이탈 자체를 막아선 안 된다
+- **테스트**: `test/participant_left_test.dart` 6건 (`leftAt` 왕복·`leftAt: null` 계약·`activeParticipants` 분리)
+- **보안 규칙**: 예상대로 **변경 없음**. `firestore.rules:54`의 본인 문서 update 권한으로 충분
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** — G1 재현 절차(학생 나가기 → 교사 `참여` 1 → 0)로 확인 필요
 
 ### [Gemini-1-Exit-02] ← 위 항목 확인 중 사진에서 발견 (2026-08-25)
 - **현상**: 학생 나가기 확인 다이얼로그에서 **`계속 참여하기` 글자가 버튼 밖으로 삐져나와 두 줄로 깨진다** (`계속 참여하` / `기`)
@@ -536,7 +590,26 @@
   - 학생 화면이 `endedAt`을 구독 → 종료 시 마이크 잠금 + "수업이 끝났어요" 안내 → 확인 시 랜딩으로 이동
   - `ideas` 보안 규칙에 종료 후 쓰기 차단을 넣을지는 백엔드 방과 별도 판단(클라이언트 차단만으로 충분할 수 있음)
 - **연결**: `Gemini-1-Exit-01`(leftAt), `Mercury-Report-05`(참여자 정의), `Mercury-Session-03`(세션 경과 시간) — 모두 **세션 라이프사이클** 문제다. SHARED_CONTEXT §8 전략기획의 "세션 시작/종료 라이프사이클 재설계"와 동일 사안
-- **상태**: 🔴 미해결 — 설계 필요 (앱개발 · 전략기획)
+- **구현 완료** (2026-08-26, 앱개발 방) — 네 건을 한 덩어리로 설계했고 **이 항목이 기준선**이다:
+  - **스키마**: `sessions/{code}.endedAt: Timestamp?` (+ `createdAt`은 Mercury-Session-03). `null`이면 진행 중.
+    `SessionState.endedAt` / `isEnded` 추가
+  - **교사 쓰기 지점**: 뒤로가기 → 종료 확인 다이얼로그 → `_endSession()`.
+    `endSession()`은 `endedAt`과 함께 `voteOpen: false`도 쓴다 — 종료된 수업에 투표가 열린 채로 남지 않게 한다.
+    기록에 실패해도 교사는 화면을 벗어날 수 있어야 하므로 예외를 삼키고 로컬 복귀 상태(`active_teacher_session`)만 정리한다
+  - **학생 반응**: 이미 구독 중인 세션 스트림에 `isEnded`가 실려오면 `_handleSessionEnded()` 실행 —
+    ① VAD·녹음·되돌리기 타이머 중단 ② **확정 대기 중이던 초안 폐기**(종료 후 제출은 리포트를 오염시킨다)
+    ③ `_sessionEnded` 플래그로 마이크 탭/롱프레스·`_submitIdea`·`_castVote`·`forceStart` 수신을 전부 잠금
+    ④ `_markLeft()`로 퇴장 기록 ⑤ `_SessionEndedDialog` 안내 ⑥ 확인 시 `popUntil(isFirst)` → 랜딩
+  - 다이얼로그는 `barrierDismissible: false`에 닫기 경로가 하나뿐이다 — 종료는 선택이 아니라 통보다
+  - `_endedHandled` 플래그로 스트림이 여러 번 emit해도 안내는 1회만 뜬다
+- **보안 규칙**: 변경 없음. 종료 후 `ideas` 쓰기 차단은 **클라이언트 잠금만** 적용했다.
+  규칙으로 막으려면 `ideas` create에 세션 문서 `get()`이 필요해 읽기 비용이 의견 1건마다 발생한다 —
+  악의적 우회가 아니라 실수 방지가 목적이므로 클라이언트로 충분하다고 판단. 필요 시 백엔드 방 별건
+- **남은 설계 결정 (중요)**: 교사 하단 독의 **kRed `종료` 버튼은 여전히 리포트 화면으로 갈 뿐 세션을 끝내지 않는다.**
+  실제 종료는 **뒤로가기 → 다이얼로그 → `종료`** 경로뿐이다. 라벨과 동작이 어긋나 있어
+  QA 시 "종료를 눌렀는데 학생 화면이 그대로"로 오판할 수 있다. 라벨 변경(`종료` → `수업기록`)이나
+  리포트 화면에서의 종료 확정 등은 **UI/UX 방 결정 사항**으로 남긴다
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
 
 ### [Gemini-1-Exit-04] ← 위 검토 중 발견 (2026-08-25)
 - **현상**: 나가기 다이얼로그의 안내와 실제 동작이 다르다.
@@ -546,7 +619,11 @@
 - **수정 방향**: 목적지 변경은 `Gemini-1-Exit-03` 이후로 미뤘으므로, **문구를 현재 동작에 맞춘다.**
   예: "다시 코드를 넣어야 들어올 수 있어요" → "나가면 선생님 화면에서 빠져요"
 - **비고**: 반대로 문구에 맞춰 랜딩까지 보내는 안은 보류됐다. 수업 중 학생이 실수로 나갔을 때 코드를 다시 받느라 **수업 흐름이 끊기는 비용**이 상태 명확성의 이득보다 크다는 판단(2026-08-25). 학생측 세션 복귀 수단이 없다는 점도 근거 — 교사에게는 `active_teacher_session` 복귀가 있으나 학생에게는 대응 기능이 없다
-- **상태**: 🔴 미해결 — 문구 수정 대기
+- **2026-08-26 갱신**: `Gemini-1-Exit-03`이 해결되어 **정상 종료 경로가 생겼다.**
+  이제 `나가기`는 예외 경로이므로 목적지 논쟁의 중요도가 낮아졌다(문서에 적어둔 예상대로).
+  종료로 이탈할 때는 랜딩까지 되돌리고, `나가기`는 기존대로 이름 입력 화면에 남는다 — 의도적으로 다르게 두었다.
+  남은 것은 **문구 정정 하나**이며 UI/UX 방 항목이다
+- **상태**: 🔴 미해결 — 문구 수정 대기 (UI/UX 방)
 
 ---
 
@@ -564,6 +641,46 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
 - **확인 필요**: `WidgetsBindingObserver` 재구독 로직 또는 Firebase 자체 재연결 동작
 - **등급**: P1 (세션 재진입 시 상태 복구 실패 가능)
 - **상태**: 🟡 미재현 (Mercury QA v2에서 재확인 필요)
+
+### [Common-Rules-01] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
+- **현상**: `ideas` 하위 컬렉션의 `create`, `update`가 `signedIn()`만 요구 → **다른 학생은 물론 그 세션에 참여하지도 않은 익명 사용자가 남의 의견 텍스트를 덮어쓸 수 있음**. 임의 세션 코드에 의견을 주입하는 것도 가능
+- **원인**: 규칙만의 문제가 아니라 스키마 문제. `ideas` 문서에 작성자 식별 필드가 없어(`speaker`는 `'학생'` 하드코딩 문자열) 규칙에서 "본인"을 판별할 방법이 없었음
+- **등급**: **P1** — Gemini QA S-7에서 실검증 예정. 수정 가능으로 나오면 Apollo 진입 차단 조건
+- **수정 (2026-08-26)**:
+  - `firebase_moamal_repository.dart` `submitIdea()` — 문서에 `authorUid`(현재 로그인 UID) 기록. 의견 쓰기 경로가 이 메서드 하나뿐이라 레포지터리에서 채움
+  - `firestore.rules` `ideas` — `create`는 `request.resource.data.authorUid == request.auth.uid`, `update`는 교사 또는 작성자 본인만 + `authorUid` 변경 금지
+  - `authorUid`가 없는 구 문서(기존 8건)는 교사만 수정 가능
+- **상태**: ⚠️ **코드 수정 완료 · 배포 전** — 규칙을 먼저 배포하면 구 빌드의 의견 제출이 전부 막힘(P0 회귀). **두 기기 모두 새 빌드 설치 → 규칙 배포** 순서 필수
+
+### [Common-Rules-02] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
+- **현상**: 교사가 투표를 닫은(`voteOpen=false`) 뒤에도 학생 클라이언트가 자기 `votes/{uid}` 문서를 계속 쓰거나 바꿀 수 있음. 규칙에 투표 개폐 조건이 없음
+- **재현 경로(악의 없는 경우)**: 학생 기기가 오프라인일 때 투표 → 큐에 쌓인 쓰기가 투표 종료 후 서버에 도달 → 확정된 결과 수치가 뒤늦게 바뀜
+- **영향**: 교사가 "결과 확정"을 선언한 뒤에도 득표가 변할 수 있음. 빔프로젝터 화면은 실시간 구독이라 학생들 눈앞에서 숫자가 바뀜
+- **등급**: P1 (Gemini QA S-8 점검 항목)
+- **수정 방향**: `votes` 규칙에 세션 문서 조회를 추가해 `voteOpen == true`일 때만 쓰기 허용. 투표 1건당 규칙 내부 읽기 1회가 추가됨(학급 25명 기준 25 read)
+- **상태**: 🔴 미해결 — **Gemini QA 직전 적용은 보류 권장** (투표는 QA 핵심 경로라 새 거부 조건 추가는 QA 후가 안전)
+
+### [Common-Rules-03] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
+- **현상**: `match /sessions/{sessionCode} { allow read: if signedIn(); }`은 get과 **list를 모두 허용**. 익명 사용자가 `sessions` 컬렉션을 통째로 조회해 **모든 교사의 세션 코드·제목·ownerUid를 열람**할 수 있음
+- **영향**: Common-Rules-01과 합쳐지면 임의 수업에 의견 주입이 가능했음. Rules-01 수정 후에도 세션 코드 유출 경로는 남음
+- **등급**: P1 (파일럿 전 필수, QA 차단 아님)
+- **수정 방향**: 앱은 세션 문서를 코드로 단건 `get`만 하므로 list를 막아도 동작 영향 없음
+- **상태**: 🔴 미해결
+
+### [Common-Rules-04] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
+- **현상**: 학생은 `votes` 컬렉션 목록 조회 권한이 없는데(본인 문서만), 학생 화면은 `state.votes`로 득표를 계산 → **투표 종료 후 학생 화면 결과 막대가 항상 0**
+- **원인**: 규칙 버그가 아니라 **계약 미정의**. `firebase_moamal_repository.dart`가 권한 오류를 빈 값으로 삼켜 오류 표시도 없음
+- **등급**: P2
+- **선택지**: ① 교사 앱이 투표 종료 시 `sessions/{code}.voteTally`에 집계를 기록(권장, 비밀투표 유지) ② `votes` list 개방(학생이 서로의 투표를 열람 — 비권장) ③ 학생 화면에서 결과 표시 제거
+- **상태**: 🔴 미해결 (설계 결정 필요 — [UI/UX]·[Flutter 앱개발]과 합의)
+
+### [Common-Auth-01] ← 백엔드 인증 점검 중 발견 (2026-08-26)
+- **현상**: `AuthService.signInAnonymously()`가 `currentUser`가 있으면 **그 계정을 그대로 반환**. Mercury에서 교사 기기로 쓴 공기계를 학생 기기로 재사용하면 학생이 **교사 UID로 입장**
+- **영향**: `participants/{교사uid}`·`votes/{교사uid}`가 학생 것처럼 생성되고, 규칙상 `isOwner()`가 참이라 **권한 오류가 전혀 나지 않음** → 잘못된 데이터가 조용히 쌓이고 Gemini QA S 섹션 결과 전체가 무효가 될 수 있음
+- **등급**: **P1** (QA 유효성 기준으로는 P0 성격)
+- **회피(코드 수정 없이)**: 학생 역할 기기의 앱 데이터 삭제 또는 로그아웃 후 QA 시작. 입장 직후 `participants` 문서 ID가 교사 UID가 아닌지 확인
+- **수정 방향**: 학생 입장 경로에서 익명이 아닌 계정이면 `signOut()` 후 익명 로그인 ([Flutter 앱개발] 범위)
+- **상태**: 🔴 미해결 (QA는 준비 절차로 회피 가능)
 
 ---
 

@@ -11,7 +11,9 @@ import '../../widgets/group_card.dart';
 
 class ClusterVoteScreen extends StatefulWidget {
   final String sessionCode;
-  final Stream<SessionState>? sessionStream;
+  /// 필수. 화면이 직접 listenToSession()을 부르면 build마다 재구독된다
+  /// (Mercury-3-Student-01과 동일 원인).
+  final Stream<SessionState> sessionStream;
   final List<Group> groups;
   final FirebaseMoamalRepository repo;
   final GeminiGroupingEngine groupingEngine;
@@ -22,7 +24,7 @@ class ClusterVoteScreen extends StatefulWidget {
   const ClusterVoteScreen({
     super.key,
     required this.sessionCode,
-    this.sessionStream,
+    required this.sessionStream,
     required this.groups,
     required this.repo,
     required this.groupingEngine,
@@ -149,7 +151,7 @@ class _ClusterVoteScreenState extends State<ClusterVoteScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<SessionState>(
-      stream: widget.sessionStream ?? widget.repo.listenToSession(widget.sessionCode),
+      stream: widget.sessionStream,
       builder: (context, snapshot) {
         final session = snapshot.data;
         final isCompact = context.isCompact;

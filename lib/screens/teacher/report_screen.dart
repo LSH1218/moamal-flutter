@@ -7,14 +7,21 @@ import '../../services/gemini_grouping_engine.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
 
-class ReportScreen extends StatelessWidget {
+/// 리포트 화면.
+///
+/// **StatefulWidget인 이유** (Mercury-Report-06): 부모(`TeacherHomeScreen`)의
+/// `setState`는 이미 스택에 올라간 이 route를 리빌드하지 못한다. 생성자로 값을
+/// 복사받는 구조였을 때 "AI 요약 생성"을 눌러도 화면이 그대로여서 교사에게는
+/// 버튼이 고장난 것으로 보였다. 이제 생성 결과를 `onGenerateReport()`의
+/// **반환값**으로 직접 받아 자기 상태를 갱신한다.
+class ReportScreen extends StatefulWidget {
   final SessionState session;
   final List<Group> groups;
   final GeminiGroupingEngine groupingEngine;
   final String elapsedText;
   final MeetingReport? meetingReport;
   final bool isGeneratingReport;
-  final VoidCallback onGenerateReport;
+  final Future<MeetingReport?> Function() onGenerateReport;
 
   const ReportScreen({
     super.key,
@@ -27,20 +34,50 @@ class ReportScreen extends StatelessWidget {
     required this.onGenerateReport,
   });
 
+  @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  MeetingReport? _report;
+  late bool _isGenerating;
+
+  @override
+  void initState() {
+    super.initState();
+    _report = widget.meetingReport;
+    _isGenerating = widget.isGeneratingReport;
+  }
+
   String get _dateLabel {
     final now = DateTime.now();
     return '${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _generate() async {
+    if (_isGenerating) return;
+    setState(() => _isGenerating = true);
+    final report = await widget.onGenerateReport();
+    if (!mounted) return;
+    setState(() {
+      // 실패 시 null이 오므로 기존 리포트를 지우지 않는다.
+      if (report != null) _report = report;
+      _isGenerating = false;
+    });
+  }
+
   void _share() {
     final text =
-        meetingReport?.toPlainText(session.title) ?? '아직 리포트가 없습니다.';
-    share_plus.Share.share(text, subject: '모아말 수업기록 ${session.sessionCode}');
+        _report?.toPlainText(widget.session.title) ?? '아직 리포트가 없습니다.';
+    share_plus.Share.share(text,
+        subject: '모아말 수업기록 ${widget.session.sessionCode}');
   }
 
   @override
   Widget build(BuildContext context) {
     final isCompact = context.isCompact;
+    final session = widget.session;
+    final meetingReport = _report;
 
     return Scaffold(
       backgroundColor: kGround,
@@ -94,22 +131,22 @@ class ReportScreen extends StatelessWidget {
       body: isCompact
           ? _CompactBody(
               session: session,
-              groups: groups,
-              groupingEngine: groupingEngine,
-              elapsedText: elapsedText,
+              groups: widget.groups,
+              groupingEngine: widget.groupingEngine,
+              elapsedText: widget.elapsedText,
               meetingReport: meetingReport,
-              isGenerating: isGeneratingReport,
-              onGenerate: onGenerateReport,
+              isGenerating: _isGenerating,
+              onGenerate: _generate,
               onShare: _share,
             )
           : _MediumBody(
               session: session,
-              groups: groups,
-              groupingEngine: groupingEngine,
-              elapsedText: elapsedText,
+              groups: widget.groups,
+              groupingEngine: widget.groupingEngine,
+              elapsedText: widget.elapsedText,
               meetingReport: meetingReport,
-              isGenerating: isGeneratingReport,
-              onGenerate: onGenerateReport,
+              isGenerating: _isGenerating,
+              onGenerate: _generate,
               onShare: _share,
             ),
     );
