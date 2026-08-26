@@ -1054,6 +1054,124 @@ class _GroupApproveCard extends StatelessWidget {
     this.onMerge,
   });
 
+  Future<void> _handleTap(BuildContext context) async {
+    if (!canToggle) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('투표 진행 중에는 변경할 수 없어요')),
+      );
+      return;
+    }
+    if (!approved) {
+      onApprove();
+      return;
+    }
+    // 승인 취소는 교사가 수정한 그룹명까지 함께 지우는 파괴적 액션이라 확인을 받는다.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: kCardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: kRed,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Center(
+                      child: Text('!',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      '승인을 취소할까요?',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: kInk,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '"$title" 그룹이 학생 투표 카드에서 사라져요. 직접 수정한 그룹 이름도 함께 없어집니다.',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.65,
+                  color: kInk.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: kGreen,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Text(
+                          '유지하기',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx, true),
+                    child: Container(
+                      width: 104,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: kCardBg,
+                        border: Border.all(color: kRed, width: 1.5),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        '취소',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: kRed,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed == true) onUnapprove();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1220,9 +1338,10 @@ class _GroupApproveCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(15, 0, 15, 15),
             child: GestureDetector(
-              onTap: canToggle && !isPending
-                  ? (approved ? onUnapprove : onApprove)
-                  : null,
+              // 투표 중에도 탭은 항상 받는다 — canToggle이 false일 때 null을 주면
+              // 아무 반응이 없어 교사가 "안 눌렸나?" 하고 재탭하는 습관이 생기고,
+              // 투표가 닫힌 뒤 같은 자리를 누르면 실제로 승인이 삭제됐다(Mercury-4-Organize-01).
+              onTap: isPending ? null : () => _handleTap(context),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1236,12 +1355,16 @@ class _GroupApproveCard extends StatelessWidget {
                       : null,
                 ),
                 child: isPending
-                    ? const Center(
+                    ? Center(
                         child: SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: kGreen),
+                            strokeWidth: 2,
+                            // kGreen 배경(미승인 버튼) 위 kGreen 스피너는 사실상 안 보였다
+                            // (Mercury-4-Organize-04) — 배경과 반대색으로 분기
+                            color: approved ? kGreen : Colors.white,
+                          ),
                         ),
                       )
                     : Text(

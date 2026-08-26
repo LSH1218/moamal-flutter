@@ -66,7 +66,9 @@ Gemini는 **에뮬레이터 = 교사 / 공기계 = 학생** 2기기 구성으로
 
 - `lib/utils/responsive.dart`에 브레이크포인트 존재: **600dp 미만 = compact**, **900dp 이상 = tablet**
 - `sheetConstraints(maxWidth: 520)` — 태블릿에서 시트·다이얼로그 과폭 방지
-- **화면 14개 중 8개만 적용.** 미적용: `join_screen`(학생 첫 화면), `beam_projector_screen`(태블릿·프로젝터가 주 대상인데 미적용), `mic_control_screen`, `pending_approval_screen`, `facilitator_tab`, `student_tab`
+- **미적용: `join_screen`(학생 첫 화면), `beam_projector_screen`(태블릿·프로젝터가 주 대상인데 미적용), `mic_control_screen`, `pending_approval_screen`.**
+  ~~`facilitator_tab`, `student_tab`~~ — 2026-08-26 확인 결과 UI 재설계 후 어디서도 참조되지 않는
+  사재 코드였다(`Mercury-Redesign-01`). 실행되지 않는 화면이므로 순회 대상에서 제외, 파일 자체도 삭제됨
 - **브레이크포인트가 "넓어질 때"만 다룸** — 좁아질 때의 하한이 없음. Mercury-Layout-01이 정확히 이 경우(320dp)
 - 고정 px 지정은 다수 존재하나 대부분 아이콘·배지 크기라 정상. **고정 크기가 `Row`에 나란히 놓여 가로 폭을 소진하는 경우만 실제 위험**
 

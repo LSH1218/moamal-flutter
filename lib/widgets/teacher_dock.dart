@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// 교사 홈 하단 독.
-/// kGreen 배경, 5개 버튼 인라인: [공유][정리][마이크][학생][종료]
+/// kGreen 배경, 5개 버튼 인라인: [공유][정리][마이크][학생][수업기록]
 class TeacherDock extends StatelessWidget {
   final Widget micButton;
   final int unclassifiedCount;
@@ -99,11 +99,12 @@ class _DockBar extends StatelessWidget {
                   label: '학생',
                   onTap: onStudents,
                 ),
+                // 실제 세션 종료는 뒤로가기 → 다이얼로그 경로다. 이 버튼은 리포트 화면으로
+                // 이동만 한다(§16) — 라벨·아이콘·색을 '종료'가 아니라 '수업기록'에 맞춘다.
                 _DockSlot(
-                  icon: Icons.stop_circle_outlined,
-                  label: '종료',
+                  icon: Icons.assignment_outlined,
+                  label: '수업기록',
                   onTap: onEnd,
-                  isEnd: true,
                 ),
               ],
             ),
@@ -127,13 +128,11 @@ class _DockSlot extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool isEnd;
 
   const _DockSlot({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.isEnd = false,
   });
 
   @override
@@ -144,9 +143,7 @@ class _DockSlot extends StatelessWidget {
         width: TeacherDock._slotSize,
         height: TeacherDock._slotSize,
         decoration: BoxDecoration(
-          color: isEnd
-              ? kRed
-              : Colors.white.withValues(alpha: 0.12),
+          color: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(

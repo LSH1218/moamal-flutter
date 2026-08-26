@@ -1095,13 +1095,8 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
 
   Widget _voteView(SessionState state) {
     final groups = state.approvedGroups;
-    final counts = <String, int>{};
-    for (final gid in state.votes.values) {
-      counts[gid] = (counts[gid] ?? 0) + 1;
-    }
-    final maxVotes = counts.values.isEmpty
-        ? 1
-        : counts.values.reduce((a, b) => a > b ? a : b);
+    // 학생은 votes 컬렉션을 조회할 권한이 없다(Common-Rules-04, 비밀투표 유지 확정) —
+    // 여기서 득표수를 계산하면 항상 0이 나온다. 결과는 빔프로젝터 화면으로만 공개한다.
 
     return Column(
       children: [
@@ -1177,8 +1172,6 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                     final isSelected =
                         _pendingVoteId == group.groupId ||
                         _myVote == group.groupId;
-                    final voteCount = counts[group.groupId] ?? 0;
-                    final ratio = maxVotes > 0 ? voteCount / maxVotes : 0.0;
                     final canTap =
                         state.voteOpen && _myVote == null && !_isVoting;
 
@@ -1256,22 +1249,6 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                                 ),
                               ),
                             ],
-                            if (!state.voteOpen) ...[
-                              const SizedBox(height: 10),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(
-                                  value: ratio,
-                                  minHeight: 10,
-                                  backgroundColor: isSelected
-                                      ? Colors.white.withValues(alpha: 0.18)
-                                      : kInk.withValues(alpha: 0.1),
-                                  valueColor: AlwaysStoppedAnimation(
-                                    isSelected ? kYellow : kGreen,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -1280,7 +1257,28 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                 ),
         ),
         // Bottom bar
-        if (state.voteOpen)
+        if (!state.voteOpen && groups.isNotEmpty)
+          // 투표가 닫히면 카드별 득표 막대 대신 여기서 한 번만 안내한다 —
+          // 학생 화면은 결과를 계산할 권한이 없으므로(Common-Rules-04) 앞 화면(빔프로젝터)으로 유도한다.
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+            decoration: BoxDecoration(
+              color: kGround,
+              border: Border(top: BorderSide(color: const Color(0xFFE8E4DC))),
+            ),
+            child: Text(
+              _myVote != null
+                  ? '투표 완료 · 결과는 앞 화면에서 확인해요'
+                  : '투표가 마감됐어요 · 결과는 앞 화면에서 확인해요',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: kGreen,
+              ),
+            ),
+          )
+        else if (state.voteOpen)
           Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
             decoration: BoxDecoration(
@@ -1411,7 +1409,7 @@ class _ExitDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              '다시 코드를 넣어야 들어올 수 있어요',
+              '나가면 선생님 화면에서 빠져요',
               style: TextStyle(
                 fontSize: 13.5,
                 color: Colors.black54,
