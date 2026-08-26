@@ -82,7 +82,7 @@
 | 카카오/네이버 Flutter SDK 미연동 | 중간 | Functions 준비 완료, Flutter 앱 대화방 작업 필요 | Flutter 앱 대화방에서 SDK 연동 |
 | ~~Node.js 20 지원 종료~~ | ~~중간~~ | **해결됨 2026-08-07** — Node.js 22 업그레이드 완료 | 완료 |
 | 슈퍼바이저 모드 노출 | 중간 | 랜딩 로고 3탭 → PIN 1218 | 출시 전 제거 또는 숨김 처리 |
-| 학생이 다른 의견을 수정 가능 | 높음 | `ideas`의 `create, update`가 모든 인증 사용자에게 허용 | 작성자 UID 검증 추가 필요 |
+| 학생이 다른 의견을 수정 가능 | 높음 | `ideas`의 `create, update`가 모든 인증 사용자에게 허용 — **Gemini S-7에서 실검증, Apollo 진입 차단 조건** | 작성자 UID 검증 추가 필요 |
 
 ## 7. 현재 우선순위
 
@@ -100,8 +100,13 @@
 - **Gemini QA (현재 단계)**: 2기기 구성 — **공기계 = 학생 / 에뮬레이터 = 교사** (1라운드). 2라운드에서 역할 스왑.
   진입 전 학생측 P1 3건 선수정 완료(2026-08-25, 커밋 `87569ce`) — 전부 **실기기 미검증**이라 G1~G3에서 우선 확인:
   Mercury-Share-01(QR 딥링크·스캐너·수신 경로) → G1, Mercury-3-Student-01(스트림 재구독) → G2, Mercury-3-Student-03(forceStart 잠금) → G3.
-  섹션 구성: G1 학생 진입 · G2 학생 발화→교사 반영 · G3 마이크 원격 제어 · G4 승인→실투표 · G5 다중 학생 ·
-  G6 네트워크·생명주기(Common-Network-01) · G7 역할 스왑 · G8 폭 매트릭스 · GR 회귀
+  진행 순서: **CORE**(G0 환경 · G1 학생 진입 · G2 발화→반영 · G3 마이크 제어 · G4 승인→실투표 · **S 보안 규칙**) → ROLE SWAP(G7) →
+  STABILITY(G6, Common-Network-01) → EXTENDED(G5 다중 학생 · G8 폭 매트릭스) → REGRESSION(GR).
+  **핵심 PASS는 공기계 1 + 에뮬 1의 1:1 양방향 E2E**이며, 단일 마일스톤은 **G4-3**(학생 실투표 → 교사 득표 바 실시간 갱신)이다.
+  G5·G8은 확장 항목 — 장비·시간이 부족하면 `BLOCKED — 테스트 환경 부족`으로 남겨도 Gemini 실패로 간주하지 않는다.
+  **S 섹션 신설** — Gemini가 익명 UID를 실제로 쓰는 첫 단계라 Firestore 보안 규칙을 여기서만 검증할 수 있다.
+  `학생 A → 타인 idea/vote/participants 수정 불가`, `approvedGroups·sessions·teacher_notes 쓰기 불가`, `교사 권한 정상`을 확인하며
+  결과는 **Apollo 진입 차단 조건**으로 취급한다 (§6 ‘학생이 다른 의견을 수정 가능’ 위험과 직결).
 - **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
