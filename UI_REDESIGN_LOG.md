@@ -123,6 +123,57 @@
 - 다이얼로그 좌우 여백 360dp 미만에서 40 → 16dp
 - **이유**: Mercury-Layout-01 3건이 전부 "좁은 폭에서 고정 크기가 가로를 소진"하는 같은 원인
 
+### 11. 딥링크 참여 경로 정비 (deep_link_service + QR 6곳 + join_screen + main.dart) — 2026-08-25
+
+**기존**: QR에 평문 세션 코드(`KBZ5A2`)만 인코딩. 폰 기본 카메라로 찍으면 글자만 뜨고 앱이 열리지 않아 결국 수동 입력해야 했다
+**변경**:
+- `deep_link_service.dart`에 `buildJoinUri(code)` / `parseScanned(raw)` 추가
+- QR 생성 6곳을 `moamal://join/{code}`로 교체 — `teacher_home_screen`(QR 시트·전체화면), `beam_projector_screen`(2곳), `display_tab`, `facilitator_tab`
+- 앱 내 스캐너(`join_screen` `QrScanScreen.onDetect`)의 `code.length == 6` 판정을 `parseScanned()`로 교체.
+  **QR만 바꿨다면 정상 동작하던 앱 내 QR 참여가 깨졌을 것** — 생성부와 판독부는 반드시 짝으로 수정한다.
+  `parseScanned`는 딥링크와 평문 6자리를 모두 허용해 기존 배포 QR과의 호환을 유지
+- `main.dart` 수신 경로 4건 수정:
+  - `_joinWithCode()`가 이름·번호 입력을 건너뛰고 바로 `StudentSessionScreen`으로 보내 `participants` 등록이 누락됐다 → `fetchSessionTitle()` 확인 후 `StudentProfileScreen` 경유
+  - 세션 존재 확인 없이 진입 → `title == null`이면 안내 후 중단
+  - `Navigator.pushReplacement` → `push`. **아래 2번 항목과 동일한 블랙스크린 버그가 딥링크 경로에 그대로 남아 있었다**
+  - `codeStream()` 구독이 "초기 링크 없음 + 교사 세션 복귀 없음"일 때만 등록되어, 교사 세션 복귀 시 실행 중 딥링크를 못 받았다 → 분기보다 앞에서 항상 구독
+- **이유**: 교실에서 QR을 띄우는 시나리오 전체가 무효 상태였다. 단 앱 미설치 기기는 `moamal://`로 열 수 없어 웹 랜딩 URL 도입은 별도 결정으로 남김
+
+### 12. 학생 세션 스트림 구독 위치 이동 (student_session_screen.dart) — 2026-08-25
+
+**기존**: `StreamBuilder(stream: _repo.listenToSession(...))`을 `build()` 안에서 직접 호출.
+`listenToSession()`은 호출할 때마다 `stopListening()` 후 새 `StreamController`를 만들므로, **setState가 일어날 때마다 Firestore 5개 구독이 끊겼다 재생성**됐다
+**변경**: `_sessionStream` 필드를 신설해 `initState`에서 1회만 생성 후 전달. `TeacherHomeScreen`이 쓰던 패턴과 동일
+- **이유**: 학생 화면 데이터 갱신 불안정과 Firebase 읽기 증가. Gemini의 지연 시간 측정을 오염시켜 선수정 대상이 됐다
+- **남은 위험**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`에 `widget.sessionStream ?? widget.repo.listenToSession(...)` 폴백이 남아 있다. 현재 호출부가 항상 `sessionStream`을 넘겨 발현하지 않지만, 넘기지 않는 호출부가 생기면 같은 버그가 재발한다
+
+### 13. forceStart 잠금 해제 순서 교정 (student_session_screen.dart) — 2026-08-25
+
+**기존**: `_handleForceStart()`가 `if (_micStatus != _MicStatus.idle) return;`으로 **먼저 반환**한 뒤에야 `_forceStopped = false`를 세팅했다.
+`_confirmSubmit()`은 상태를 `done`으로 두고 **학생이 마이크를 다시 누를 때까지 유지**하므로, 한 번이라도 발언한 학생은 교사가 [시작]을 눌러도 잠금이 풀리지 않았다. 학생 본인도 `_onTap`의 `if (_forceStopped) return` 가드에 막혀 앱 재시작 외 탈출 경로가 없었다
+**변경**:
+- 잠금 해제·배너·햅틱을 early-return **앞으로** 이동 — 마이크 상태와 무관하게 항상 실행
+- 자동 녹음 시작 조건을 `_onTap`과 동일하게 정렬 — `idle` 또는 `done`에서 시작하되 `done`이면 `idle`로 리셋 후 녹음
+- **이유**: 잠금만 풀고 끝냈다면 교사가 기대한 자동 녹음은 여전히 걸리지 않았다. 두 가지를 함께 고쳐야 [시작] 버튼이 의도대로 동작한다
+- 9번 항목(forceStop 배너 상태 분리)의 짝 — 배너/잠금을 나눈 뒤 남아 있던 해제 경로의 결함이다
+
+---
+
+## 재설계로 사라진 것 (2026-08-25 확인)
+
+`lib/screens/teacher/tabs/`의 구 탭 3종이 `organize_screen`·`teacher_dock`으로 대체된 뒤
+**어느 화면에서도 참조되지 않는 사재 코드**로 남아 있다 — `facilitator_tab`(621줄), `student_tab`(277줄), `display_tab`(231줄), 합 1,129줄.
+
+| 사라진 것 | 대체 | 비고 |
+|---|---|---|
+| 3탭 구조(진행·학생·표시) | `organize_screen` 3탭 + `teacher_dock` | 의도된 대체 |
+| 교사 QR 표시(`display_tab`) | `_QrSheet` · `_QrFullScreen` · `beam_projector_screen` | 의도된 대체 |
+| **교사 수동 의견 입력** | **없음** | ⚠️ 대체 없이 소실 |
+
+`student_tab`의 발표자 이름 + 발표 내용 TextField + "의견 추가" 버튼이 함께 끊기면서
+**현재 `ideas`를 생성하는 경로는 STT 단일**이다. 마이크가 불가한 환경이거나 말하기를 어려워하는 학생은 의견을 낼 방법이 없다.
+사재 코드 정리와 수동 입력 복원 여부는 `BUG_LOG_v2.md` **Mercury-Redesign-01** 참조.
+
 ---
 
 ## 변경되지 않은 것
@@ -228,14 +279,15 @@ Section 0~8, 10, R 완료. **Section 9(학생 흐름)는 2기기 환경이 필�
 
 ### Mercury에서 발견된 P1 (우선 수정 대상)
 
-| ID | 내용 |
-|---|---|
-| Mercury-Share-01 | QR에 딥링크 미인코딩 → 학생이 QR을 찍어도 앱이 열리지 않음 |
-| Mercury-Session-02 | 앱 재시작 시 교사의 병합·이동·승인 결과 전부 소실 |
-| Mercury-Report-06 | 리포트 생성 버튼 무반응(화면 미갱신) → 반복 탭·GPT 비용 중복 |
-| Mercury-4-Organize-01 | 승인 취소 피드백 부재 → 재탭 습관 → 투표 종료 후 실삭제로 데이터 유실 (P2에서 상향) |
-| Mercury-3-Student-01 | StudentSessionScreen StreamBuilder 재구독 (Gemini에서 재현 확인 예정) |
-| Common-Network-01 | 백그라운드 복귀 Firestore 리스너 재연결 미검증 |
+| ID | 내용 | 상태 (2026-08-25) |
+|---|---|---|
+| Mercury-Share-01 | QR에 딥링크 미인코딩 → 학생이 QR을 찍어도 앱이 열리지 않음 | ✅ 코드 수정 · 실기기 미검증 (G1) |
+| Mercury-3-Student-01 | StudentSessionScreen StreamBuilder 재구독 | ✅ 코드 수정 · 실기기 미검증 (G2) |
+| Mercury-3-Student-03 | forceStart 잠금 미해제 — 발언한 학생은 영구 잠김 (P2→P1) | ✅ 코드 수정 · 실기기 미검증 (G3) |
+| Mercury-Session-02 | 앱 재시작 시 교사의 병합·이동·승인 결과 전부 소실 | 🔴 미해결 — Firestore 스냅샷 설계 필요, Apollo 전 |
+| Mercury-Report-06 | 리포트 생성 버튼 무반응(화면 미갱신) → 반복 탭·GPT 비용 중복 | 🔴 미해결 — Gemini 중 재진입으로 우회 |
+| Mercury-4-Organize-01 | 승인 취소 피드백 부재 → 재탭 습관 → 투표 종료 후 실삭제로 데이터 유실 | 🔴 미해결 |
+| Common-Network-01 | 백그라운드 복귀 Firestore 리스너 재연결 미검증 | 🔴 미검증 — Gemini G6에서 최초 확인 |
 
 ### 별도 결정이 필요한 사항 (QA 범위 밖)
 
@@ -243,3 +295,31 @@ Section 0~8, 10, R 완료. **Section 9(학생 흐름)는 2기기 환경이 필�
 - 반응형 — 화면 14개 중 8개만 적용, 320dp 하한 미대응
 - iOS 지원 범위 — Windows 개발 환경이라 빌드 불가, 실행 이력 전무
 - 다크 모드 지원 여부
+
+---
+
+## Gemini QA 진입 (2026-08-25)
+
+Mercury에서 이관된 학생측 P1 3건을 **진입 전에 선수정**했다 (커밋 `87569ce`, 위 11~13번 항목).
+전부 **실기기 미검증** 상태이며 Gemini G1~G3에서 확인한다.
+
+| 수정 | 검증 섹션 |
+|---|---|
+| Mercury-Share-01 — QR 딥링크·스캐너·수신 경로 | G1 |
+| Mercury-3-Student-01 — 스트림 재구독 | G2 |
+| Mercury-3-Student-03 — forceStart 잠금 (P2→P1) | G3 |
+
+체크리스트: `gemini_qa.html` (항목 90개, 진행 순서 CORE → ROLE SWAP → STABILITY → EXTENDED → REGRESSION)
+
+### 장비 구성과 제약
+
+- **공기계 SM-A305N = 학생** (320dp, API 30) / **Pixel_6 AVD = 교사** (411dp, API 34, `google_apis`)
+- **PC에 물리 마이크가 없다** → 에뮬 STT 불가. 마이크는 항상 공기계에 있으므로
+  **1라운드에서 학생 STT를, G7 역할 스왑에서 교사 STT를** 각각 실기기로 검증한다
+- 에뮬 후면 카메라가 `virtualscene` → G7에서 에뮬이 학생일 때 QR 스캔 불가. `Webcam0` 변경 또는 코드 입력 대체
+- RAM 2048MB → G5 다중 학생(에뮬 2대)은 확장 항목으로 분류
+
+### 재설계 이후 반응형 미적용 화면 (정정)
+
+`join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`.
+기존 목록에 있던 `facilitator_tab`·`student_tab`은 **사재 코드**이므로 순회 대상에서 제외했다.

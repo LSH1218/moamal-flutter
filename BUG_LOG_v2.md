@@ -150,9 +150,29 @@
 - **현상**: 리포트 공유 진입점이 **세 곳**인데 null 가드가 제각각. `facilitator_tab.dart:567-575`에도 동일한
   `meetingReport?.toPlainText(...) ?? '아직 리포트가 없습니다.'` 패턴이 가드 없이 존재
 - **파일**: `lib/screens/teacher/tabs/facilitator_tab.dart:571`
+- **범위 정정 (2026-08-25)**: `facilitator_tab`은 UI 재설계 후 **호출되지 않는 사재 코드**로 확인됨(Mercury-Redesign-01). 따라서 실제 공유 진입점은 **3곳이 아니라 2곳**(`report_screen` 상단 AppBar · 하단 CTA)이다
 - **등급**: P2
 - **수정 방향**: 공유 로직을 단일 헬퍼로 추출하고 `meetingReport == null`이면 호출 자체를 막는 구조로 통일 (Mercury-Report-02와 함께 수정)
 - **상태**: 🔴 미해결
+
+### [Mercury-Redesign-01] ← 2026-08-25 Gemini 선수정 중 코드 확인으로 발견
+- **현상**: UI 재설계로 대체된 구 탭 3종이 **어느 화면에서도 참조되지 않는 사재 코드**로 남아 있다.
+  `lib/screens/teacher/tabs/` — `facilitator_tab.dart`(621줄), `student_tab.dart`(277줄), `display_tab.dart`(231줄), 합 1,129줄.
+  `grep -rn "StudentTab|FacilitatorTab|DisplayTab" lib/`가 정의부 외에는 아무것도 잡지 못한다
+- **파급 1 — QA 낭비**: `MERCURY_TO_GEMINI_HANDOFF.md` 3-2절이 `facilitator_tab`·`student_tab`을
+  "반응형 미적용 화면"으로 G8 폭 매트릭스 순회 대상에 넣어두었다. 실재하지 않는 화면이라 시간만 버린다
+- **파급 2 — 버그 로그 오염**: `Mercury-Report-07`이 `facilitator_tab.dart:571`을 리포트 공유 진입점 3곳 중 하나로 지목했으나,
+  해당 경로는 실행되지 않으므로 **실제 진입점은 2곳**이다
+- **파급 3 — 기능 소실 (중요)**: `student_tab`에 있던 **교사 수동 의견 입력 UI**
+  (발표자 이름 + 발표 내용 TextField + "의견 추가" 버튼)가 함께 끊겼다.
+  현재 앱에서 `ideas`를 생성하는 경로는 **STT 단일**이다.
+  마이크가 불가한 환경이거나 말하기를 어려워하는 학생은 **의견을 제출할 방법이 없다**
+- **등급**: P2 (사재 코드 자체는 무해) — 단 **파급 3은 제품 결정 사항**. 수동 입력을 재설계 UI에 되살릴지 판단 필요
+- **수정 방향**:
+  - 사재 파일 3개 삭제 또는 `legacy/`로 격리 (앱개발 방)
+  - 인수인계 문서·`Mercury-Report-07` 범위 정정 → **2026-08-25 반영 완료**
+  - 교사/학생 수동 텍스트 입력 복원 여부 → 전략기획 판단
+- **상태**: 🟡 문서 정정 완료 · 코드 정리와 수동 입력 복원은 미결정
 
 ### [Mercury-Vote-01] ← Section R 회귀 체크 중 발견 (2026-08-24)
 - **현상**: 득표수가 동점인데 한 그룹만 1위(kYellow)로 강조됨. QA 중 두 그룹 모두 1표·50%인 상태에서
