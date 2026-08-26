@@ -123,39 +123,53 @@
 - 다이얼로그 좌우 여백 360dp 미만에서 40 → 16dp
 - **이유**: Mercury-Layout-01 3건이 전부 "좁은 폭에서 고정 크기가 가로를 소진"하는 같은 원인
 
-### 11. 딥링크 참여 경로 정비 (deep_link_service + QR 6곳 + join_screen + main.dart) — 2026-08-25
+### 11. 학생 진입 경로 일원화 (join_screen + main.dart) — 2026-08-25
 
-**기존**: QR에 평문 세션 코드(`KBZ5A2`)만 인코딩. 폰 기본 카메라로 찍으면 글자만 뜨고 앱이 열리지 않아 결국 수동 입력해야 했다
-**변경**:
-- `deep_link_service.dart`에 `buildJoinUri(code)` / `parseScanned(raw)` 추가
-- QR 생성 6곳을 `moamal://join/{code}`로 교체 — `teacher_home_screen`(QR 시트·전체화면), `beam_projector_screen`(2곳), `display_tab`, `facilitator_tab`
-- 앱 내 스캐너(`join_screen` `QrScanScreen.onDetect`)의 `code.length == 6` 판정을 `parseScanned()`로 교체.
-  **QR만 바꿨다면 정상 동작하던 앱 내 QR 참여가 깨졌을 것** — 생성부와 판독부는 반드시 짝으로 수정한다.
-  `parseScanned`는 딥링크와 평문 6자리를 모두 허용해 기존 배포 QR과의 호환을 유지
-- `main.dart` 수신 경로 4건 수정:
-  - `_joinWithCode()`가 이름·번호 입력을 건너뛰고 바로 `StudentSessionScreen`으로 보내 `participants` 등록이 누락됐다 → `fetchSessionTitle()` 확인 후 `StudentProfileScreen` 경유
-  - 세션 존재 확인 없이 진입 → `title == null`이면 안내 후 중단
-  - `Navigator.pushReplacement` → `push`. **아래 2번 항목과 동일한 블랙스크린 버그가 딥링크 경로에 그대로 남아 있었다**
-  - `codeStream()` 구독이 "초기 링크 없음 + 교사 세션 복귀 없음"일 때만 등록되어, 교사 세션 복귀 시 실행 중 딥링크를 못 받았다 → 분기보다 앞에서 항상 구독
-- **이유**: 교실에서 QR을 띄우는 시나리오 전체가 무효 상태였다. 단 앱 미설치 기기는 `moamal://`로 열 수 없어 웹 랜딩 URL 도입은 별도 결정으로 남김
+**기존**: 학생이 세션에 들어오는 길이 두 갈래였고, 서로 다른 화면 흐름을 탔다.
 
-### 12. 학생 세션 스트림 구독 위치 이동 (student_session_screen.dart) — 2026-08-25
+```
+코드 직접 입력  →  세션 확인  →  이름·번호 입력  →  발표 화면
+QR 딥링크       →  ─────────────────────────────→  발표 화면
+```
 
-**기존**: `StreamBuilder(stream: _repo.listenToSession(...))`을 `build()` 안에서 직접 호출.
-`listenToSession()`은 호출할 때마다 `stopListening()` 후 새 `StreamController`를 만들므로, **setState가 일어날 때마다 Firestore 5개 구독이 끊겼다 재생성**됐다
-**변경**: `_sessionStream` 필드를 신설해 `initState`에서 1회만 생성 후 전달. `TeacherHomeScreen`이 쓰던 패턴과 동일
-- **이유**: 학생 화면 데이터 갱신 불안정과 Firebase 읽기 증가. Gemini의 지연 시간 측정을 오염시켜 선수정 대상이 됐다
-- **남은 위험**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`에 `widget.sessionStream ?? widget.repo.listenToSession(...)` 폴백이 남아 있다. 현재 호출부가 항상 `sessionStream`을 넘겨 발현하지 않지만, 넘기지 않는 호출부가 생기면 같은 버그가 재발한다
+딥링크로 들어온 학생은 이름 입력 화면을 건너뛰었다. 화면 하나를 덜 보는 문제가 아니라,
+그 화면이 `participants` 등록을 담당하므로 **교사 화면에 참여자로 잡히지 않는 학생이 생긴다.**
+교사의 학생 마이크 제어 대상 목록에도 뜨지 않는다.
 
-### 13. forceStart 잠금 해제 순서 교정 (student_session_screen.dart) — 2026-08-25
+**변경**: 두 길이 같은 흐름으로 합류하도록 통일했다.
 
-**기존**: `_handleForceStart()`가 `if (_micStatus != _MicStatus.idle) return;`으로 **먼저 반환**한 뒤에야 `_forceStopped = false`를 세팅했다.
-`_confirmSubmit()`은 상태를 `done`으로 두고 **학생이 마이크를 다시 누를 때까지 유지**하므로, 한 번이라도 발언한 학생은 교사가 [시작]을 눌러도 잠금이 풀리지 않았다. 학생 본인도 `_onTap`의 `if (_forceStopped) return` 가드에 막혀 앱 재시작 외 탈출 경로가 없었다
-**변경**:
-- 잠금 해제·배너·햅틱을 early-return **앞으로** 이동 — 마이크 상태와 무관하게 항상 실행
-- 자동 녹음 시작 조건을 `_onTap`과 동일하게 정렬 — `idle` 또는 `done`에서 시작하되 `done`이면 `idle`로 리셋 후 녹음
-- **이유**: 잠금만 풀고 끝냈다면 교사가 기대한 자동 녹음은 여전히 걸리지 않았다. 두 가지를 함께 고쳐야 [시작] 버튼이 의도대로 동작한다
-- 9번 항목(forceStop 배너 상태 분리)의 짝 — 배너/잠금을 나눈 뒤 남아 있던 해제 경로의 결함이다
+```
+코드 직접 입력  ┐
+                ├→  세션 확인  →  이름·번호 입력  →  발표 화면
+QR 딥링크       ┘
+```
+
+- 딥링크도 `fetchSessionTitle()`로 세션을 먼저 확인한다. 없는 코드면 안내 후 중단
+- `Navigator.pushReplacement` → `push` — **2번 항목에서 고쳤던 블랙스크린 문제가 딥링크 경로에는 그대로 남아 있었다.**
+  같은 실수가 두 경로에 따로 존재했던 것이므로, 앞으로 학생 진입 화면을 추가할 때는 이 스택 규칙을 함께 확인한다
+
+**이유**: 진입 경로마다 다른 흐름을 두면 "어느 길로 들어왔느냐"에 따라 학생 상태가 달라진다.
+참여자 등록·뒤로 가기·오류 처리는 진입 방식과 무관해야 한다.
+
+> QR 페이로드를 딥링크로 바꾼 것과 스캐너 판독부를 함께 고친 상세 내역은
+> `BUG_LOG_v2.md` **Mercury-Share-01** 참조. UI 흐름이 아닌 데이터·배관 변경이다.
+
+---
+
+## UI 외 변경 (이 문서 범위 밖 — 참조용)
+
+재설계 이후 발견된 결함 중 **화면이 바뀌지 않은 것**은 이 문서에 적지 않는다.
+현상·원인·수정 내역은 모두 `BUG_LOG_v2.md`에 있다.
+
+| 결함 | 성격 | 참조 |
+|---|---|---|
+| 학생 화면 Firestore 구독이 `build()`마다 재생성 | 데이터 계층 | Mercury-3-Student-01 |
+| QR 페이로드·스캐너 판독부 | 데이터 계층 | Mercury-Share-01 |
+| `forceStart` 잠금 해제 순서 | 상태 전이 로직 | Mercury-3-Student-03 |
+
+> `forceStart` 항목만 화면과 접점이 있다 — 9번(forceStop 배너/잠금 상태 분리)에서
+> 두 상태를 나눈 뒤, **해제하는 쪽 순서가 어긋나 있던 것**이 뒤늦게 드러난 경우다.
+> 배너 UI 자체는 바뀌지 않았으므로 수정 내역은 BUG_LOG에 둔다.
 
 ---
 
@@ -300,8 +314,9 @@ Section 0~8, 10, R 완료. **Section 9(학생 흐름)는 2기기 환경이 필�
 
 ## Gemini QA 진입 (2026-08-25)
 
-Mercury에서 이관된 학생측 P1 3건을 **진입 전에 선수정**했다 (커밋 `87569ce`, 위 11~13번 항목).
+Mercury에서 이관된 학생측 P1 3건을 **진입 전에 선수정**했다 (커밋 `87569ce`).
 전부 **실기기 미검증** 상태이며 Gemini G1~G3에서 확인한다.
+수정 상세는 `BUG_LOG_v2.md`에 있다 — 이 중 UI 흐름이 바뀐 것은 11번 항목뿐이다.
 
 | 수정 | 검증 섹션 |
 |---|---|
@@ -311,13 +326,14 @@ Mercury에서 이관된 학생측 P1 3건을 **진입 전에 선수정**했다 (
 
 체크리스트: `gemini_qa.html` (항목 90개, 진행 순서 CORE → ROLE SWAP → STABILITY → EXTENDED → REGRESSION)
 
-### 장비 구성과 제약
+### 검증 환경
 
-- **공기계 SM-A305N = 학생** (320dp, API 30) / **Pixel_6 AVD = 교사** (411dp, API 34, `google_apis`)
-- **PC에 물리 마이크가 없다** → 에뮬 STT 불가. 마이크는 항상 공기계에 있으므로
-  **1라운드에서 학생 STT를, G7 역할 스왑에서 교사 STT를** 각각 실기기로 검증한다
-- 에뮬 후면 카메라가 `virtualscene` → G7에서 에뮬이 학생일 때 QR 스캔 불가. `Webcam0` 변경 또는 코드 입력 대체
-- RAM 2048MB → G5 다중 학생(에뮬 2대)은 확장 항목으로 분류
+기기 구성·마이크 제약·진행 순서는 이 문서의 범위가 아니다.
+`MOAMAL_SHARED_CONTEXT.md` §8 **Gemini QA** 항목과 `gemini_qa.html` G0 섹션을 본다.
+
+다만 **화면 검증에 직결되는 것 하나**만 여기 남긴다 —
+공기계 **320dp**와 에뮬레이터 **411dp**로 폭 매트릭스의 두 칸은 별도 설정 없이 커버된다.
+10번 항목(320dp 다이얼로그 대응)은 그 320dp 기기에서 직접 재확인한다.
 
 ### 재설계 이후 반응형 미적용 화면 (정정)
 
