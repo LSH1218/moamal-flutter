@@ -119,7 +119,7 @@
   Gemini 중에는 우회 가능하나 Apollo 전 수정 필요.
   **잠재 재발 지점**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의 `?? repo.listenToSession(...)` 폴백 —
   현재 호출부가 항상 `sessionStream`을 넘겨 미발현이나, 넘기지 않는 호출부가 생기면 Mercury-3-Student-01이 재발
-- **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의); **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
+- **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 — **Gemini에서 구체화됨(2026-08-25)**: ① 세션에 종료 상태 자체가 없어 교사가 종료해도 학생이 계속 발언 가능(`Gemini-1-Exit-03`), ② 퇴장 처리 미구현(`Gemini-1-Exit-01`, leftAt 방식 확정), ③ 참여자 정의 미확정(`Mercury-Report-05`), ④ 경과 시간 리셋(`Mercury-Session-03`) — 네 개가 한 덯어리; 수업 시간 타이머 서브 화면 진입 시 동작 정의; **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
 - **Flutter UI/UX (반응형)**: 반응형 미적용 — `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`. **`facilitator_tab`·`student_tab`·`display_tab`(합 1,129줄)은 UI 재설계 후 어느 화면에서도 참조되지 않는 사재 코드**(2026-08-25 확인) — QA 순회 대상에서 제외, 삭제 여부는 앱개발 방 판단. `student_tab`에 있던 **교사 수동 의견 입력 UI도 함께 끊겼다** — 현재 의견 생성 경로는 STT 단일이다. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
 
 ## 9. 최근 변경 기록
