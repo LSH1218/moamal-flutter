@@ -61,15 +61,19 @@
   (`report_screen.dart:165` `_YellowCta(onTap: onShare)` — null 체크 없음). 2026-08-24 Section 10 QA에서
   두 버튼 모두 공유 시트가 열리고 "아직 리포트가 없습니다."가 노출되는 것을 재확인.
   ※ 상단 버튼까지 눌린 이유는 실행 중이던 빌드가 수정 전 버전이었기 때문(수정은 미커밋 상태). 핫 리스타트 후 재검증 필요
-- **잔여 수정**: `_CompactBody`/`_MediumBody`의 `_YellowCta`에도 `meetingReport == null` 가드 추가.
-  `_YellowCta`가 `VoidCallback`(non-nullable)을 받으므로 `VoidCallback?`로 완화하고 비활성 배경색 분기 필요
+- **잔여 수정 완료** (2026-08-26, Flutter UI/UX): `_YellowCta.onTap`을 `VoidCallback`→`VoidCallback?`로 완화,
+  비활성 시 배경 `kInk.withValues(alpha:0.1)` + 텍스트 반투명. `_CompactBody`/`_MediumBody` 양쪽 호출부에서
+  `onShare: meetingReport != null ? _share : null` 전달. 상단 AppBar 버튼과 동일한 가드 방식으로 통일
+- **상태**: ✅ 해결 · **실기기 미검증**
 
 ### [Mercury-Report-04] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 최초 생성인데 버튼 라벨이 "AI 요약 **다시** 생성"
 - **원인**: `report_screen.dart:384` 조건이 `meetingReport == null && groups.isNotEmpty` — 아직 한 번도 생성되지 않은 상태에서만 렌더링되는데 라벨은 재생성 문구
 - **등급**: P3
-- **수정 방향**: 라벨을 "AI 요약 생성"으로. 재생성이 필요하면 `meetingReport != null`일 때 별도 버튼을 두는 구조로 분리
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26, Flutter UI/UX): 라벨 "AI 요약 다시 생성" → "AI 요약 생성". 이 분기는
+  `meetingReport == null`일 때만 렌더링되므로(한 번도 생성된 적 없음) "다시"라는 표현 자체가 틀렸다.
+  재생성 버튼이 필요하면(`meetingReport != null`) 별도 UI로 분리해야 하며, 그 결정은 아직 없다
+- **상태**: ✅ 해결 · **실기기 미검증**
 
 ### [Mercury-Report-05] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 리포트 화면 "참여 N명"이 실제 참여자 수가 아님
@@ -217,7 +221,8 @@
 - **범위 정정 (2026-08-25)**: `facilitator_tab`은 UI 재설계 후 **호출되지 않는 사재 코드**로 확인됨(Mercury-Redesign-01). 따라서 실제 공유 진입점은 **3곳이 아니라 2곳**(`report_screen` 상단 AppBar · 하단 CTA)이다
 - **등급**: P2
 - **수정 방향**: 공유 로직을 단일 헬퍼로 추출하고 `meetingReport == null`이면 호출 자체를 막는 구조로 통일 (Mercury-Report-02와 함께 수정)
-- **상태**: 🔴 미해결
+- **상태**: ✅ 해결 (2026-08-26) — Mercury-Report-02 잔여 수정으로 실제 진입점 2곳(상단 AppBar·하단 CTA) 모두 가드 적용 완료.
+  단일 헬퍼 추출은 별도 리팩터링이라 하지 않았다 — 두 곳 다 이미 `_share()` 한 함수를 공유하고 있어 로직 중복은 없었다
 
 ### [Mercury-Redesign-01] ← 2026-08-25 Gemini 선수정 중 코드 확인으로 발견
 - **현상**: UI 재설계로 대체된 구 탭 3종이 **어느 화면에서도 참조되지 않는 사재 코드**로 남아 있다.
@@ -290,8 +295,8 @@
   - 승인 후(`approved == true`) 배경 = `kCardBg` → 초록 스피너가 정상적으로 보임
 - **파일**: `lib/screens/teacher/organize_screen.dart:1236-1244`
 - **등급**: P3 — 기능은 정상이나 교사가 "눌렸는지" 확인할 수 없음. Mercury-4-Organize-01(재탭 유발 → 데이터 유실)과 같은 성격의 피드백 부재
-- **수정 방향**: 스피너 색을 배경과 반대로 분기 — `color: approved ? kGreen : Colors.white`
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26, Flutter UI/UX): `color: approved ? kGreen : Colors.white`로 분기 적용
+- **상태**: ✅ 해결 · **실기기 미검증**
 
 ---
 
@@ -363,10 +368,12 @@
 - **파일**: `lib/screens/teacher/organize_screen.dart:1221` — `_GroupApproveCard`
 - **등급**: ~~P2~~ → **P1 상향** (2026-08-24, Section 8 QA 중 실제 데이터 유실 확인)
 - **실제 발생 시나리오**: 투표 중 "승인 취소" 탭 → 반응 없음 → 교사가 "안 눌렸나?" 하고 재탭하는 습관이 생김 → 투표를 닫은 뒤(`voteOpen=false`) 같은 자리를 누르면 이번엔 실제로 `deleteApprovedGroup()` 실행 → 승인 상태 + 교사가 수정한 그룹명이 함께 소실. Section 8 테스트 중 "접근성 높은 불고기" 승인이 이 경로로 사라짐(수동 재승인으로 복구)
-- **수정 방향**:
-  - 투표 중 탭 시 "투표 진행 중에는 변경할 수 없어요" SnackBar 또는 버튼 위 안내 문구
-  - 승인 취소에 확인 다이얼로그 추가 — 교사가 수정한 그룹명이 함께 사라지므로 파괴적 액션에 해당
-- **상태**: 🔴 미해결
+- **수정** (2026-08-26, Flutter UI/UX): `organize_screen.dart` — `_GroupApproveCard`의 버튼 `onTap`을
+  `canToggle && !isPending ? (...) : null`(투표 중엔 완전 무반응)에서 `isPending`일 때만 null이 되도록 바꾸고,
+  `_handleTap()`으로 분기: ① 투표 중(`!canToggle`)이면 SnackBar "투표 진행 중에는 변경할 수 없어요" ②
+  승인 취소(`approved`)면 확인 다이얼로그(교사 종료 다이얼로그와 동일 톤 — kRed "!" 배지, "유지하기"(kGreen)/"취소"(kRed outline))
+  ③ 그 외엔 바로 승인. 투표 중에도 탭에 반응이 생기므로 재탭 습관 자체가 사라지고, 승인 취소는 항상 확인을 거친다
+- **상태**: ✅ 해결 · **실기기 미검증**
 
 ### [Mercury-4-Organize-02] ← 재설계 후 발견
 - **현상**: 원문 탭에서 "새 그룹"으로 의견 이동 시 생성된 그룹에 AI 제목이 없음 (`aiTitle: null`) → Jaccard 폴백이 의견 텍스트 전체를 그룹 제목으로 사용 → 매우 긴 제목 표시
@@ -635,11 +642,22 @@
 - **보안 규칙**: 변경 없음. 종료 후 `ideas` 쓰기 차단은 **클라이언트 잠금만** 적용했다.
   규칙으로 막으려면 `ideas` create에 세션 문서 `get()`이 필요해 읽기 비용이 의견 1건마다 발생한다 —
   악의적 우회가 아니라 실수 방지가 목적이므로 클라이언트로 충분하다고 판단. 필요 시 백엔드 방 별건
-- **남은 설계 결정 (중요)**: 교사 하단 독의 **kRed `종료` 버튼은 여전히 리포트 화면으로 갈 뿐 세션을 끝내지 않는다.**
-  실제 종료는 **뒤로가기 → 다이얼로그 → `종료`** 경로뿐이다. 라벨과 동작이 어긋나 있어
-  QA 시 "종료를 눌렀는데 학생 화면이 그대로"로 오판할 수 있다. 라벨 변경(`종료` → `수업기록`)이나
-  리포트 화면에서의 종료 확정 등은 **UI/UX 방 결정 사항**으로 남긴다
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
+- **~~남은 설계 결정~~ → 완료 (2026-08-26)**: 하단 독 `종료` 버튼이 리포트 화면으로 이동만 하고
+  세션을 끝내지 않아 라벨·동작이 어긋나 있던 문제. UI/UX 방이 결정하고 앱개발 방이 구현했다.
+  - **UI/UX 방**: `teacher_dock.dart` — `종료`(kRed) → `수업기록`(중립색, 아이콘 `Icons.assignment_outlined`)으로 라벨 교체.
+    `_DockSlot`의 `isEnd` 분기 제거 — "종료"라는 이름과 빨간색은 실제로 끝내는 동작 하나에만 쓰기로 확정
+  - **앱개발 방**: `report_screen.dart`에 실제 종료 CTA 신설. 확정된 흐름은
+    `수업 중 → [수업기록](이동만) → 리포트 작성·공유 → [수업 끝내기](신규) → 랜딩`.
+    - `_EndSessionCta` — kRed 아웃라인, 기존 kYellow 저장/공유 CTA 아래 별도 줄(병합하지 않음)
+    - `_EndSessionDialog` — `barrierDismissible: false`, "되돌릴 수 없다"를 명시. `_onWillPop()`과 같은 원칙
+    - 확인 시 `ReportScreen.onEndSession`(=`TeacherHomeScreen._endSession`) 호출 → `endedAt`+`voteOpen:false` 기록 →
+      `Navigator.popUntil((route) => route.isFirst)`로 랜딩까지 복귀.
+      교사 홈의 `PopScope` 경로(뒤로가기 1번)와 달리 리포트는 랜딩에서 2단계 깊이라 `popUntil`을 썼다
+    - `_isEnding` 로컬 상태로 버튼이 로딩 표시 + 중복 탭 방지. 실패해도 버튼을 되살려 재시도 가능
+  - 학생 쪽은 이미 `endedAt`을 구독하고 있어 **추가 작업이 없었다** — 어느 경로로 `endedAt`이 찍히든 동일하게 반응한다
+- **파일**: `lib/screens/teacher/report_screen.dart`, `lib/screens/teacher/teacher_home_screen.dart`, `lib/widgets/teacher_dock.dart`
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** — 재현: 리포트 화면 → `수업 끝내기` → 확인 → 랜딩 복귀,
+  학생 화면에 "수업이 끝났어요" 안내가 뜨는지 확인
 
 ### [Gemini-1-Exit-04] ← 위 검토 중 발견 (2026-08-25)
 - **현상**: 나가기 다이얼로그의 안내와 실제 동작이 다르다.
@@ -653,7 +671,10 @@
   이제 `나가기`는 예외 경로이므로 목적지 논쟁의 중요도가 낮아졌다(문서에 적어둔 예상대로).
   종료로 이탈할 때는 랜딩까지 되돌리고, `나가기`는 기존대로 이름 입력 화면에 남는다 — 의도적으로 다르게 두었다.
   남은 것은 **문구 정정 하나**이며 UI/UX 방 항목이다
-- **상태**: 🔴 미해결 — 문구 수정 대기 (UI/UX 방)
+- **수정** (2026-08-26, Flutter UI/UX): 문구를 "다시 코드를 넣어야 들어올 수 있어요" →
+  "나가면 선생님 화면에서 빠져요"로 교체. 목적지는 그대로 `StudentProfileScreen`(이름 입력 화면)이며
+  이번엔 문구만 실제 동작에 맞췄다
+- **상태**: ✅ 해결 · **실기기 미검증**
 
 ---
 
@@ -708,7 +729,14 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
   - [UI/UX] 학생 투표 화면에서 득표 막대·비율 표시 제거, 투표 후 상태를 "투표 완료 · 결과는 앞 화면에서 확인해요"로 대체 (`student_session_screen.dart` `_voteView()`)
   - [Flutter 앱개발] 학생 화면이 `state.votes`에 의존하지 않게 되므로, 학생 경로에서 득표 집계 계산을 걷어낸다. `votes` 구독 자체는 교사 화면이 그대로 쓰므로 레포지터리는 손대지 않는다
   - **백엔드 후속 없음** — 보안 규칙 변경도, 새 스키마도 필요 없다. 학생이 `votes`를 못 읽는 현재 규칙이 그대로 정답이 된다(비밀투표 유지)
-- **상태**: 🟡 **설계 확정 · 구현 대기** ([UI/UX] 주관, [Flutter 앱개발] 협조). 구현 후 학생 화면에 0표 막대가 남아 있지 않은지 확인
+- **구현** (2026-08-26, Flutter UI/UX): `student_session_screen.dart` `_voteView()` —
+  카드별 `LinearProgressIndicator`(항상 0표 표시)를 완전히 제거. 투표가 닫히면 하단 바를
+  "투표 완료 · 결과는 앞 화면에서 확인해요"(투표했을 때) / "투표가 마감됐어요 · 결과는 앞 화면에서 확인해요"
+  (안 골랐을 때)로 대체 — 기존엔 `voteOpen=false`가 되는 순간 하단 바 자체가 사라져 학생에게
+  아무 안내도 남지 않았다. `state.votes` 기반 집계 코드(`counts`/`maxVotes`)도 함께 제거 —
+  학생 권한으로는 항상 빈 값이라 죽은 계산이었다. `[Flutter 앱개발]` 협조 항목(학생 경로 득표 집계 로직 제거)은
+  이번 변경으로 UI 쪽 소비처가 없어졌으므로 남은 작업이 없어 보이나, 레포지터리·모델 레벨 정리 여부는 그쪽 판단
+- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**. 확인 후 학생 화면에 0표 막대가 남아 있지 않은지 확인
 
 ### [Common-Auth-01] ← 백엔드 인증 점검 중 발견 (2026-08-26)
 - **현상**: `AuthService.signInAnonymously()`가 `currentUser`가 있으면 **그 계정을 그대로 반환**. Mercury에서 교사 기기로 쓴 공기계를 학생 기기로 재사용하면 학생이 **교사 UID로 입장**

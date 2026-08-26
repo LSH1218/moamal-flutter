@@ -23,6 +23,10 @@ class ReportScreen extends StatefulWidget {
   final bool isGeneratingReport;
   final Future<MeetingReport?> Function() onGenerateReport;
 
+  /// 실제 수업 종료 (§16). endedAt 기록 + 로컬 복귀 상태 정리까지 담당하며
+  /// 화면 이동은 하지 않는다 — 이동은 이 화면이 랜딩까지 popUntil로 처리한다.
+  final Future<void> Function() onEndSession;
+
   const ReportScreen({
     super.key,
     required this.session,
@@ -32,6 +36,7 @@ class ReportScreen extends StatefulWidget {
     required this.meetingReport,
     required this.isGeneratingReport,
     required this.onGenerateReport,
+    required this.onEndSession,
   });
 
   @override
@@ -41,6 +46,7 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   MeetingReport? _report;
   late bool _isGenerating;
+  bool _isEnding = false;
 
   @override
   void initState() {
@@ -64,6 +70,29 @@ class _ReportScreenState extends State<ReportScreen> {
       if (report != null) _report = report;
       _isGenerating = false;
     });
+  }
+
+  /// [수업 끝내기] — 확인 다이얼로그 → endSession() → 랜딩까지 스택 정리.
+  /// 리포트 화면(route 3: 랜딩→교사홈→리포트)에서 곧바로 랜딩으로 빠지므로
+  /// 교사홈의 PopScope 경로(뒤로가기→다이얼로그)와 달리 popUntil(isFirst)을 쓴다.
+  Future<void> _confirmEndSession() async {
+    if (_isEnding) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _EndSessionDialog(),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isEnding = true);
+    try {
+      await widget.onEndSession();
+    } finally {
+      // 실패해도 되돌아가지 않고 계속 시도할 수 있게 버튼을 되살린다.
+      if (mounted) setState(() => _isEnding = false);
+    }
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _share() {
@@ -137,7 +166,9 @@ class _ReportScreenState extends State<ReportScreen> {
               meetingReport: meetingReport,
               isGenerating: _isGenerating,
               onGenerate: _generate,
-              onShare: _share,
+              onShare: meetingReport != null ? _share : null,
+              onEndSession: _confirmEndSession,
+              isEndingSession: _isEnding,
             )
           : _MediumBody(
               session: session,
@@ -147,7 +178,9 @@ class _ReportScreenState extends State<ReportScreen> {
               meetingReport: meetingReport,
               isGenerating: _isGenerating,
               onGenerate: _generate,
-              onShare: _share,
+              onShare: meetingReport != null ? _share : null,
+              onEndSession: _confirmEndSession,
+              isEndingSession: _isEnding,
             ),
     );
   }
@@ -162,7 +195,9 @@ class _CompactBody extends StatelessWidget {
   final MeetingReport? meetingReport;
   final bool isGenerating;
   final VoidCallback onGenerate;
-  final VoidCallback onShare;
+  final VoidCallback? onShare;
+  final VoidCallback onEndSession;
+  final bool isEndingSession;
 
   const _CompactBody({
     required this.session,
@@ -173,6 +208,8 @@ class _CompactBody extends StatelessWidget {
     required this.isGenerating,
     required this.onGenerate,
     required this.onShare,
+    required this.onEndSession,
+    required this.isEndingSession,
   });
 
   @override
@@ -196,12 +233,20 @@ class _CompactBody extends StatelessWidget {
             ],
           ),
         ),
-        // 하단 CTA
+        // 하단 CTA — 저장/공유(kYellow)와 실제 종료(kRed)를 한 눈에 구분되게 별도 줄로 둔다.
+        // 레이아웃 배치(간격·정렬)는 UI/UX 방 재검토 필요.
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: _YellowCta(
             label: '리포트 저장 / 공유 ↗',
             onTap: onShare,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+          child: _EndSessionCta(
+            onTap: onEndSession,
+            isLoading: isEndingSession,
           ),
         ),
       ],
@@ -218,7 +263,9 @@ class _MediumBody extends StatelessWidget {
   final MeetingReport? meetingReport;
   final bool isGenerating;
   final VoidCallback onGenerate;
-  final VoidCallback onShare;
+  final VoidCallback? onShare;
+  final VoidCallback onEndSession;
+  final bool isEndingSession;
 
   const _MediumBody({
     required this.session,
@@ -229,6 +276,8 @@ class _MediumBody extends StatelessWidget {
     required this.isGenerating,
     required this.onGenerate,
     required this.onShare,
+    required this.onEndSession,
+    required this.isEndingSession,
   });
 
   @override
@@ -288,11 +337,19 @@ class _MediumBody extends StatelessWidget {
                   ],
                 ),
               ),
+              // 레이아웃 배치(간격·정렬)는 UI/UX 방 재검토 필요.
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 child: _YellowCta(
                   label: 'PDF 내보내기 / 학교 시스템 연동',
                   onTap: onShare,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: _EndSessionCta(
+                  onTap: onEndSession,
+                  isLoading: isEndingSession,
                 ),
               ),
             ],
@@ -420,9 +477,12 @@ class _TopicsPanel extends StatelessWidget {
         ),
         if (meetingReport == null && groups.isNotEmpty) ...[
           const SizedBox(height: 12),
+          // 이 분기는 meetingReport == null일 때만 렌더링된다 — 즉 아직 한 번도
+          // 생성된 적이 없다. "다시 생성"은 실제로 일어난 적 없는 재생성을 암시해
+          // Mercury-Report-04로 이어졌다.
           OutlinedButton(
             onPressed: isGenerating ? null : onGenerate,
-            child: Text(isGenerating ? '생성 중...' : 'AI 요약 다시 생성'),
+            child: Text(isGenerating ? '생성 중...' : 'AI 요약 생성'),
           ),
         ],
       ],
@@ -568,29 +628,181 @@ class _QuoteCard extends StatelessWidget {
 // ── Yellow CTA 버튼 ───────────────────────────────────────────────────────
 class _YellowCta extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _YellowCta({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: kYellow,
+          color: enabled ? kYellow : kInk.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
-            color: kInk,
+            color: enabled ? kInk : kInk.withValues(alpha: 0.35),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── 수업 끝내기 CTA (§16) ─────────────────────────────────────────────────
+// kYellow 저장/공유와 대비되는 kRed 아웃라인 — 파괴적 액션임을 시각적으로 분리.
+// 배치·간격은 UI/UX 방 재검토 대상.
+class _EndSessionCta extends StatelessWidget {
+  final VoidCallback onTap;
+  final bool isLoading;
+
+  const _EndSessionCta({required this.onTap, required this.isLoading});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: kCardBg,
+          border: Border.all(color: kRed, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.center,
+        child: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: kRed),
+              )
+            : const Text(
+                '수업 끝내기',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: kRed,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+/// 수업 종료 확인. barrierDismissible: false — 되돌릴 수 없는 액션이라
+/// 실수로 바깥을 탭해 닫히면 안 된다 (teacher_home_screen.dart _onWillPop()과 같은 원칙).
+class _EndSessionDialog extends StatelessWidget {
+  const _EndSessionDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: kCardBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: kRed,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Center(
+                    child: Text('!',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '수업을 끝낼까요?',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: kInk,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '학생 화면에 종료 안내가 표시되고 더 이상 의견을 낼 수 없어요. 되돌릴 수 없어요.',
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.65,
+                color: kInk.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, false),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: kGround,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        '취소',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: kInk,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context, true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: kRed,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        '수업 끝내기',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

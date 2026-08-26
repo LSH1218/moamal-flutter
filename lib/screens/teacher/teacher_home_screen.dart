@@ -471,6 +471,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           meetingReport: _meetingReport,
           isGeneratingReport: _isGeneratingReport,
           onGenerateReport: _generateReport,
+          onEndSession: _endSession,
         ),
       ),
     );

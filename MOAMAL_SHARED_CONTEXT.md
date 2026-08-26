@@ -116,11 +116,15 @@
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
 - **AI/백엔드**: **`ideas` 규칙 배포** — 새 빌드 설치 확인 후 `firebase deploy --only firestore:rules` (§15, 순서 어기면 의견 제출 P0 회귀); Gemini S 섹션 결과 회수 후 `Common-Rules-02`(투표 종료 후 vote 쓰기)·`Common-Rules-03`(sessions list) 적용; 세션 `endedAt` 도입 후 ideas·votes 쓰기 차단 규칙 적용(§15); App Check 적용 — 익명 인증이 열려 있어 UID 단위 rate limit이 사실상 무력, 파일럿 전 필수; 개발/운영 환경 분리; rate limit 컬렉션 TTL 정책 설정 여부 콘솔 확인
-- **App 개발 (2026-08-26 완료)**: ~~학생 퇴장 처리(`Gemini-1-Exit-01`)~~ · ~~세션 종료 상태(`Gemini-1-Exit-03`)~~ · ~~그룹 구성 소실(`Mercury-Session-02`)~~ · ~~경과 시간 리셋(`Mercury-Session-03`)~~ · ~~리포트 화면 미갱신(`Mercury-Report-06`)~~ → **전부 코드 수정 완료 · 실기기 미검증**. 스키마는 §16. 예상대로 **보안 규칙 변경 없음**(세션 라이프사이클 한정 — 같은 날 백엔드 방의 `ideas`/`votes` 규칙 변경은 별건). 다음 Gemini 라운드 우선 검증 4가지: ① 학생 나가기 → 교사 `참여` 1→0 ② 교사 종료 → 학생 마이크 잠금·안내·랜딩 복귀 ③ 교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지(**신규 세션으로 테스트** — 구 세션은 `createdAt`/`groupSnapshot`이 없다) ④ 리포트 `AI 요약 생성` 즉시 반영. **주의**: 실제 세션 종료는 하단 독 kRed `종료`(리포트 화면으로 이동할 뿐)가 아니라 **뒤로가기 → 다이얼로그 → `종료`** 경로다 — 라벨·동작 불일치는 UI/UX 방 결정 사항으로 남겨둠
+- **App 개발 (2026-08-26 완료)**: ~~학생 퇴장 처리(`Gemini-1-Exit-01`)~~ · ~~세션 종료 상태(`Gemini-1-Exit-03`)~~ · ~~그룹 구성 소실(`Mercury-Session-02`)~~ · ~~경과 시간 리셋(`Mercury-Session-03`)~~ · ~~리포트 화면 미갱신(`Mercury-Report-06`)~~ → **전부 코드 수정 완료 · 실기기 미검증**. 스키마는 §16. 예상대로 **보안 규칙 변경 없음**(세션 라이프사이클 한정 — 같은 날 백엔드 방의 `ideas`/`votes` 규칙 변경은 별건). 다음 Gemini 라운드 우선 검증 4가지: ① 학생 나가기 → 교사 `참여` 1→0 ② 교사 종료 → 학생 마이크 잠금·안내·랜딩 복귀 ③ 교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지(**신규 세션으로 테스트** — 구 세션은 `createdAt`/`groupSnapshot`이 없다) ④ 리포트 `AI 요약 생성` 즉시 반영. **주의(해소됨)**: 세션 종료 경로가 뒤로가기와 하단 독 두 갈래였던 문제 — 하단 독 라벨·동작 불일치는 **2026-08-26 UI/UX 방이 해결**(`종료`→`수업기록`, kRed 제거, `teacher_dock.dart`), 리포트 화면의 실제 종료 버튼은 **같은 날 앱개발 방이 구현 완료**(아래 항목 참조). 이제 정상 종료는 리포트 화면의 `[수업 끝내기]` 하나로 모인다
 - **App 개발**: ~~`flutter analyze` 후 오류 수정~~ → 2026-08-25 실행, **오류 0건**(경고·info 11건: 미사용 선언 4, 스타일 7);
   Common-Network-01 백그라운드 복귀 Firestore 리스너 재검증 → Gemini G6;
-  **미해결 P1** — Mercury-Report-06(리포트 화면 미갱신), Mercury-Session-02(재시작 시 병합·승인 결과 소실), Mercury-4-Organize-01(승인 취소 확인 다이얼로그).
-  Gemini 중에는 우회 가능하나 Apollo 전 수정 필요.
+- **App 개발 (완료 2026-08-26)**: 리포트 화면 **실제 수업 종료 버튼** 구현 완료 (UI/UX 방 인계분).
+  확정 흐름: `수업 중 → [수업기록](하단 독, 이동만·기존) → 리포트 작성·공유 → [수업 끝내기](신규) → 랜딩`.
+  `report_screen.dart`에 `_EndSessionCta`(kRed 아웃라인, 저장/공유 CTA와 별도 줄)·`_EndSessionDialog`(barrierDismissible:false) 신설,
+  확인 시 `onEndSession`(=`TeacherHomeScreen._endSession`) 호출 → `Navigator.popUntil(isFirst)`로 랜딩 복귀.
+  학생 쪽(`_SessionEndedDialog`)은 이미 `endedAt`을 구독하고 있어 추가 작업이 없었다.
+  **코드 수정 완료 · 실기기 미검증.** 리포트 화면 하단 CTA 2단 배치(간격·정렬)는 UI/UX 방 재검토 대상으로 남아 있다.
   **잠재 재발 지점**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의 `?? repo.listenToSession(...)` 폴백 —
   현재 호출부가 항상 `sessionStream`을 넘겨 미발현이나, 넘기지 않는 호출부가 생기면 Mercury-3-Student-01이 재발
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 — **Gemini에서 구체화됨(2026-08-25)**: ① 세션에 종료 상태 자체가 없어 교사가 종료해도 학생이 계속 발언 가능(`Gemini-1-Exit-03`), ② 퇴장 처리 미구현(`Gemini-1-Exit-01`, leftAt 방식 확정), ③ 참여자 정의 미확정(`Mercury-Report-05`), ④ 경과 시간 리셋(`Mercury-Session-03`) — 네 개가 한 덯어리; 수업 시간 타이머 서브 화면 진입 시 동작 정의; **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
@@ -130,6 +134,9 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-26 | App 개발 | **리포트 화면 실제 종료 버튼 구현** (UI/UX 방 인계, `Gemini-1-Exit-03` 남은 설계 결정 완료). `report_screen.dart`에 `_EndSessionCta`(kRed 아웃라인)·`_EndSessionDialog`(barrierDismissible:false) 신설. `ReportScreen`에 `onEndSession` 콜백 추가, `teacher_home_screen.dart` `_goToReport()`에서 `_endSession`을 전달. 확인 시 종료 기록 후 `popUntil(isFirst)`로 랜딩까지 스택 정리(교사홈의 뒤로가기 경로는 1단계, 리포트는 2단계 깊이라 popUntil 사용). 학생 쪽 `_SessionEndedDialog`는 이미 `endedAt`을 구독 중이라 추가 작업 없음. `flutter analyze` 오류 0(기존 경고 10건 그대로), `flutter test` 23건 전원 통과(회귀 없음, 이 작업은 UI 글루 코드라 신규 단위 테스트는 추가하지 않음). 실기기 미검증 |
+| 2026-08-26 | Flutter UI/UX | 대표와 하단 독 `종료` 라벨 논의 — "종료"라는 이름·빨간색은 실제로 끝내는 동작(리포트 화면 안의 신규 버튼)에만 두고, 지금 이동만 하는 버튼은 중립색 유지로 확정. §8 App 개발 행에 [수업 끝내기] 구현 요청(위치·스타일·동작 명세) 인계 완료 |
+| 2026-08-26 | Flutter UI/UX | **앱개발 방 세션 라이프사이클(§16) 반영 batch.** Mercury-Report-02 잔여(하단 CTA null 가드)·04("다시 생성"→"생성" 라벨)·07(진입점 2곳 모두 가드) 해결. Mercury-4-Organize-01(P1, 투표 중 무반응→재탭→데이터 유실) 해결 — 탭이 항상 반응하도록 바꾸고 투표 중 SnackBar 안내 + 승인 취소 확인 다이얼로그 추가. Organize-04(kGreen 배경 위 kGreen 스피너) 해결. Gemini-1-Exit-04(나가기 문구 정정) 해결. Common-Rules-04(대표 결정 ③) 구현 — 학생 투표 화면 득표 막대(항상 0표) 제거, 마감 시 "결과는 앞 화면에서 확인해요" 안내로 대체. teacher_dock.dart `종료`→`수업기록` 라벨·아이콘 교체(§16 흐름과 조율). 전부 **코드 수정 완료·실기기 미검증**. MERCURY_TO_GEMINI_HANDOFF.md 폭 매트릭스 순회 목록에서 삭제된 tabs/ 3종 제외(Mercury-Redesign-01 반영) |
 | 2026-08-26 | 대표 결정 | **`Common-Rules-04` 선택지 ③ 확정** — 학생 화면에서 득표 표시를 제거하고 결과는 빔프로젝터 화면으로만 공개한다. `votes` 읽기 권한은 현행 유지(비밀투표), **백엔드 후속 작업 없음**. 구현은 [UI/UX] 주관. 보류한 ①(`voteTally` 집계 필드) 스키마는 §15에 보존 — 파일럿에서 개인 화면 결과 요구가 나오면 승격 |
 | 2026-08-26 | 백엔드/Firebase | §16 세션 라이프사이클 스키마의 "규칙 변경 불필요" 판단 검증 — `endedAt`·`groupSnapshot`(교사 세션 문서 update)·`leftAt`(본인 participants update) **세 건 모두 기존 규칙으로 통과 확인**. `groupSnapshot` 필드 방식은 비밀투표·프라이버시에 영향 없음(투표 데이터 미포함, 학생은 이미 ideas·approvedGroups 열람 가능)이나 **승인 전 초안이 학생 기기로 내려가는 점**과 **저장마다 전 학생이 세션 문서를 재수신하는 비용**을 §15에 기록. `firestore.rules` `sessions`를 `allow get`/`allow list: if false`로 분리(`Common-Rules-03`) — Common-Rules-01과 같은 배포에 묶음. **규칙 배포 시점 확정: 미구현 3건 완료 빌드를 두 기기 설치 직후, Gemini S 섹션 직전**(G0~G4는 현재 빌드로 진행 가능). 종료 후 ideas 쓰기 차단은 **클라이언트 잠금으로 충분하다는 앱개발 방 판단에 동의**하되 파일럿 전 규칙 승격 권고, `votes`는 예외로 Gemini 직후 적용. `gemini_qa.html` G0에 학생 기기 앱 데이터 삭제(`Common-Auth-01`) 필수 항목 추가, S 섹션 기대값 갱신 및 S-10 신설 |
 | 2026-08-26 | App 개발 | **세션 라이프사이클 4건 일괄 구현** (§16 신설). `Gemini-1-Exit-03` — `sessions.endedAt` 신설, 교사 종료 시 기록(`voteOpen: false` 동반), 학생 화면이 구독해 마이크·제출·투표 잠금 후 안내 → 랜딩 복귀. `Gemini-1-Exit-01` — `Participant.leftAt`·`isActive`·`SessionState.activeParticipants` 추가, `markParticipantLeft()` 신설(문서 삭제 아님), 나가기·종료 양쪽에서 호출, 사용처를 **접속 중**(LIVE 타일·빔프로젝터·마이크 제어·투표율 분모)과 **누적**(리포트)으로 분리. `Mercury-Session-02` — `models/group_snapshot.dart` 신설, 그룹 구성을 세션 문서 `groupSnapshot` **필드**에 저장(하위 컬렉션이 아니라 필드 → 보안 규칙 변경 불필요), `GeminiGroupingEngine.onGroupsChanged`(변경 4지점)·`restoreSnapshot()` 추가, 복원 의견을 `_processedIds`에 등록해 재그룹화 차단. `Mercury-Session-03` — `sessions.createdAt` 기준 경과 시간. `Mercury-Report-06` — `ReportScreen` StatefulWidget 전환, `onGenerateReport`가 `Future<MeetingReport?>` 반환. **정리**: `tabs/` 사재 코드 3개(1,129줄) 삭제(`Mercury-Redesign-01`), `organize_screen`·`cluster_vote_screen`의 `?? repo.listenToSession(...)` 폴백 제거 후 `sessionStream` required화(`Mercury-3-Student-01` 재발 지점 봉쇄). 테스트 12건 추가(총 18건 통과), `flutter analyze` 오류 0 · 경고/info 10 |
@@ -556,8 +563,11 @@ sessions/{sessionCode}/participants/{uid}
 - 종료 후 `ideas` 쓰기 차단은 **클라이언트 잠금만** 적용했다. 규칙으로 막으려면 `ideas` create에
   세션 문서 `get()`이 필요해 의견 1건마다 읽기가 발생한다. 악의적 우회가 아니라 실수 방지가 목적이므로
   클라이언트로 충분하다고 판단했다 — 필요 시 백엔드 방 별건.
-- 교사 하단 독의 kRed `종료` 버튼은 **여전히 리포트 화면으로 갈 뿐 세션을 끝내지 않는다.**
-  라벨과 동작의 불일치는 UI/UX 방 결정 사항.
+- 교사 하단 독의 kRed `종료` 버튼은 리포트 화면으로 갈 뿐 세션을 끝내지 않는다는 불일치가 있었다.
+  **2026-08-26 UI/UX 방이 해결** — 라벨 `종료`→`수업기록`, 아이콘·색을 비파괴 액션에 맞게 교체(`teacher_dock.dart`).
+  실제 종료는 여전히 뒤로가기 → 확인 다이얼로그 경로뿐이며, 앱개발 방이 리포트 화면에 [수업 끝내기]를
+  추가하면 `수업 중 → [수업기록] → 리포트 → [수업 끝내기] → 랜딩` 흐름이 완성된다. 그 CTA가 들어갈 자리는
+  `report_screen.dart` 하단에 TODO 주석으로 예약해 두었다.
 
 ### 그룹 스냅샷 복원 순서 (깨지기 쉬운 지점)
 
