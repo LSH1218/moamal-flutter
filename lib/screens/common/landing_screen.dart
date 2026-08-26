@@ -172,10 +172,10 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  void _joinAsStudent(BuildContext context) {
+  void _joinAsStudent(BuildContext context, {bool autoScan = false}) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const JoinScreen()),
+      MaterialPageRoute(builder: (_) => JoinScreen(autoScan: autoScan)),
     );
   }
 
@@ -196,7 +196,7 @@ class _LandingScreenState extends State<LandingScreen> {
     );
     final studentPanel = _StudentPanel(
       onCodeEntry: () => _joinAsStudent(context),
-      onQr: () => _joinAsStudent(context),
+      onQr: () => _joinAsStudent(context, autoScan: true),
       isTablet: isTablet,
     );
 

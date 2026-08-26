@@ -17,7 +17,12 @@ const _kKeyboardBg = Color(0xFFE4E0D6);
 
 // ── 세션 코드 입력 화면 ───────────────────────────────────────────────────────
 class JoinScreen extends StatefulWidget {
-  const JoinScreen({super.key});
+  /// true면 진입 직후 QR 스캐너를 바로 열어준다.
+  /// 럜딩의 QR 버튼은 이 경로로 들어온다 — 스캔을 취소하면
+  /// 코드 입력 화면에 그대로 남아 수동 입력으로 이어갈 수 있다 (Gemini-1-Join-01).
+  final bool autoScan;
+
+  const JoinScreen({super.key, this.autoScan = false});
 
   @override
   State<JoinScreen> createState() => _JoinScreenState();
@@ -27,6 +32,16 @@ class _JoinScreenState extends State<JoinScreen> {
   final _chars = <String>[];
   bool _hasError = false;
   bool _isVerifying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoScan) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scanQr();
+      });
+    }
+  }
 
   String get _code => _chars.join();
 
@@ -112,20 +127,40 @@ class _JoinScreenState extends State<JoinScreen> {
     return Scaffold(
       backgroundColor: kGround,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: SingleChildScrollView(
-                child: _buildContent(),
-              ),
-            ),
-            _buildNextButton(canNext),
-            _buildKeyboard(),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 키패드가 고정 높이면 좀은 화면에서 코드 칸과 QR 버튼을
+            // 밀어낸다. 가용 높이의 34%를 상한으로 잡고 키 높이를
+            // 역산한다 (Gemini-1-Join-02).
+            final keyPadV = _keyPadV(constraints.maxHeight);
+            return Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: _buildContent(),
+                  ),
+                ),
+                _buildNextButton(canNext),
+                _buildKeyboard(keyPadV),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  /// 가용 높이에서 키 1개의 상하 패딩을 역산한다.
+  /// 키패드 전체 = 패딩(8+12) + 4행 + 행간 3×7.
+  /// 한 행 높이 = 패딩×2 + 글자 높이(≈ 22).
+  /// 하한 6dp는 타겟 높이 34dp를 보장하기 위한 값이다.
+  double _keyPadV(double maxHeight) {
+    const textH = 22.0;
+    const chrome = 8 + 12 + 7 * 3; // 패딩 + 행간
+    final budget = maxHeight * 0.34 - chrome;
+    final rowH = budget / 4;
+    return ((rowH - textH) / 2).clamp(6.0, 11.0);
   }
 
   // ── Header ─────────────────────────────────────────────────────────────────
@@ -376,41 +411,42 @@ class _JoinScreenState extends State<JoinScreen> {
 
   // ── Custom keyboard ────────────────────────────────────────────────────────
 
-  Widget _buildKeyboard() {
+  Widget _buildKeyboard(double padV) {
     return Container(
       color: _kKeyboardBg,
       padding: const EdgeInsets.fromLTRB(6, 8, 6, 12),
       child: Column(
         children: [
-          _buildKeyRow(_kRow1),
+          _buildKeyRow(_kRow1, padV),
           const SizedBox(height: 7),
-          _buildKeyRow(_kRow2),
+          _buildKeyRow(_kRow2, padV),
           const SizedBox(height: 7),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: _buildKeyRow(_kRow3),
+            child: _buildKeyRow(_kRow3, padV),
           ),
           const SizedBox(height: 7),
-          _buildDelRow(),
+          _buildDelRow(padV),
         ],
       ),
     );
   }
 
-  Widget _buildKeyRow(List<String> keys) {
+  Widget _buildKeyRow(List<String> keys, double padV) {
     return Row(
       children: [
         for (int i = 0; i < keys.length; i++) ...[
           if (i > 0) const SizedBox(width: 5),
           Expanded(
-            child: _Key(label: keys[i], onTap: () => _addChar(keys[i])),
+            child: _Key(
+                label: keys[i], padV: padV, onTap: () => _addChar(keys[i])),
           ),
         ],
       ],
     );
   }
 
-  Widget _buildDelRow() {
+  Widget _buildDelRow(double padV) {
     return Row(
       children: [
         const Expanded(flex: 3, child: SizedBox()),
@@ -418,7 +454,8 @@ class _JoinScreenState extends State<JoinScreen> {
         for (int i = 0; i < _kRow4.length; i++) ...[
           Expanded(
             flex: 2,
-            child: _Key(label: _kRow4[i], onTap: () => _addChar(_kRow4[i])),
+            child: _Key(
+                label: _kRow4[i], padV: padV, onTap: () => _addChar(_kRow4[i])),
           ),
           const SizedBox(width: 5),
         ],
@@ -427,7 +464,7 @@ class _JoinScreenState extends State<JoinScreen> {
           child: GestureDetector(
             onTap: _del,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 11),
+              padding: EdgeInsets.symmetric(vertical: padV),
               decoration: BoxDecoration(
                 color: kInk.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(7),
@@ -510,15 +547,16 @@ class _CodeCell extends StatelessWidget {
 class _Key extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
+  final double padV;
 
-  const _Key({required this.label, required this.onTap});
+  const _Key({required this.label, required this.onTap, this.padV = 11});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11),
+        padding: EdgeInsets.symmetric(vertical: padV),
         decoration: BoxDecoration(
           color: kCardBg,
           borderRadius: BorderRadius.circular(7),
