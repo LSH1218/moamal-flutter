@@ -107,6 +107,7 @@
   **S 섹션 신설** — Gemini가 익명 UID를 실제로 쓰는 첫 단계라 Firestore 보안 규칙을 여기서만 검증할 수 있다.
   `학생 A → 타인 idea/vote/participants 수정 불가`, `approvedGroups·sessions·teacher_notes 쓰기 불가`, `교사 권한 정상`을 확인하며
   결과는 **Apollo 진입 차단 조건**으로 취급한다 (§6 ‘학생이 다른 의견을 수정 가능’ 위험과 직결).
+  **장비 제약**: PC에 물리 마이크가 없음(2026-08-25 확인) → 에뮬 STT 불가. 마이크는 항상 공기계에 있으므로 **1라운드=학생 STT, G7=교사 STT**로 나누어 둘 다 실기기 검증한다. 1라운드는 교사 발문(2-8) 불가, G7은 학생 의견 생성 불가(1라운드 세션 재사용으로 우회).
 - **Flutter UI/UX (진행 중)**: ~~Mercury-3-Student-02 forceStop 배너~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G3); ~~Mercury-Layout-01 320dp 다이얼로그~~ ✅ 코드 수정 2026-08-24(실기기 미검증 — Gemini G8); 다음 예정 — `join_screen` 반응형 적용, Mercury-4-Organize-01(투표 중 승인 변경 피드백)·Organize-04(kGreen 배경 위 kGreen 스피너), 리포트 batch는 앱개발 방 Mercury-Report-06 수정 후
 - **Flutter UI/UX**: (P2) `_SummaryPanel` 스크롤 추가 — 의견 4개 이상 시 FAB에 가려지는 오버플로우 수정 (`teacher_home_screen.dart`); (P2) `_SttBox` BOTTOM OVERFLOWED 22px 수정; (P2) 공유 버튼 `_meetingReport == null` 시 비활성화; (P2) 세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외; 카카오/네이버 로그인 버튼 UI (~~학생 입장 이름 입력 화면~~ — `StudentProfileScreen` 구현 완료)
 - **AI 의견구조화**: 브리핑 UI 설계 및 프롬프트 개선 (UI 개편 완료 후 진행 예정); 그룹화 프롬프트 추가 설계 (실제 수업 테스트 후 반복 조정 필요)
@@ -118,7 +119,7 @@
   **잠재 재발 지점**: `organize_screen.dart:67`·`cluster_vote_screen.dart:152`의 `?? repo.listenToSession(...)` 폴백 —
   현재 호출부가 항상 `sessionStream`을 넘겨 미발현이나, 넘기지 않는 호출부가 생기면 Mercury-3-Student-01이 재발
 - **전략기획**: 파일럿 교사 섭외 및 일정 확정; 세션 시작/종료 라이프사이클 재설계 (수업 시간 타이머 서브 화면 진입 시 동작 정의); **iOS 지원 범위 결정** — `ios/` 폴더는 있으나 개발 환경이 Windows라 빌드 불가, 아이폰·아이패드 실행 이력 전무. 맥 장비 확보 / 클라우드 빌드 도입 / 파일럿 안드로이드 한정 중 택일 필요 (2026-08-24 Section R QA 중 확인)
-- **Flutter UI/UX (반응형)**: 화면 14개 중 8개만 `utils/responsive.dart` 적용. 미적용: `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`, `facilitator_tab`, `student_tab`. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
+- **Flutter UI/UX (반응형)**: 반응형 미적용 — `join_screen`, `beam_projector_screen`, `mic_control_screen`, `pending_approval_screen`. **`facilitator_tab`·`student_tab`·`display_tab`(합 1,129줄)은 UI 재설계 후 어느 화면에서도 참조되지 않는 사재 코드**(2026-08-25 확인) — QA 순회 대상에서 제외, 삭제 여부는 앱개발 방 판단. `student_tab`에 있던 **교사 수동 의견 입력 UI도 함께 끊겼다** — 현재 의견 생성 경로는 STT 단일이다. 브레이크포인트가 600/900 두 개뿐이라 **좁은 폭(320dp) 하한 미대응** → Mercury-Layout-01 발생. 폭 매트릭스 테스트는 Gemini 단계에서 수행 (`MERCURY_TO_GEMINI_HANDOFF.md` 3-2절)
 
 ## 9. 최근 변경 기록
 
