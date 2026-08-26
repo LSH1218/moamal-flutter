@@ -53,6 +53,9 @@ class _JoinScreenState extends State<JoinScreen> {
       _chars.add(c);
       _hasError = false;
     });
+    // 코드가 정확히 6자리라 마지막 글자가 들어온 순간 확인할 수 있다.
+    // QR 경로는 이미 버튼 없이 자동 진행하므로 두 경로를 맞춘다 (Gemini-1-Join-04).
+    if (_chars.length == 6) _verify();
   }
 
   void _del() {
@@ -124,16 +127,13 @@ class _JoinScreenState extends State<JoinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canNext = _chars.length == 6 && !_isVerifying && !_hasError;
-
     return Scaffold(
       backgroundColor: kGround,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // 키패드가 고정 높이면 좀은 화면에서 코드 칸과 QR 버튼을
-            // 밀어낸다. 가용 높이의 34%를 상한으로 잡고 키 높이를
-            // 역산한다 (Gemini-1-Join-02).
+            // 키패드가 고정 높이면 좁은 화면에서 코드 칸과 QR 버튼을
+            // 밀어낸다. 가용 높이에서 키 높이를 역산한다 (Gemini-1-Join-02).
             final keyPadV = _keyPadV(constraints.maxHeight);
             return Column(
               children: [
@@ -143,7 +143,6 @@ class _JoinScreenState extends State<JoinScreen> {
                     child: _buildContent(),
                   ),
                 ),
-                _buildNextButton(canNext),
                 _buildKeyboard(keyPadV),
               ],
             );
@@ -240,12 +239,35 @@ class _JoinScreenState extends State<JoinScreen> {
             ),
           ),
           SizedBox(height: narrow ? 6 : 8),
-          Text(
-            '칠판 화면의 코드와 똑같이 눌러요',
-            style: TextStyle(
-              fontSize: 14,
-              color: kInk.withValues(alpha: 0.5),
-            ),
+          // 확인 중 표시는 원래 [다음] 버튼 안에 있었다.
+          // 버튼을 없았으므로 부제 자리에서 상태를 알린다.
+          Row(
+            children: [
+              if (_isVerifying) ...[
+                const SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: kGreen),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Text(
+                  _isVerifying
+                      ? '코드를 확인하고 있어요'
+                      : '칠판 화면의 코드와 똑같이 눌러요',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        _isVerifying ? FontWeight.w700 : FontWeight.w400,
+                    color: _isVerifying
+                        ? kGreen
+                        : kInk.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+            ],
           ),
           SizedBox(height: gap),
           _buildCodeCells(),
@@ -385,40 +407,6 @@ class _JoinScreenState extends State<JoinScreen> {
 
   // ── [다음] button ──────────────────────────────────────────────────────────
 
-  Widget _buildNextButton(bool canNext) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(14, 0, 14, context.isNarrow ? 6 : 10),
-      child: GestureDetector(
-        onTap: canNext ? _verify : null,
-        child: Container(
-          padding:
-              EdgeInsets.symmetric(vertical: context.isNarrow ? 15 : 19),
-          decoration: BoxDecoration(
-            color: canNext ? kGreen : kDisabled,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: _isVerifying
-              ? const Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white),
-                  ),
-                )
-              : const Text(
-                  '다음',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
 
   // ── Custom keyboard ────────────────────────────────────────────────────────
 
