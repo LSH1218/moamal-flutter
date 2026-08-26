@@ -5,7 +5,7 @@
 ## 문서 정보
 
 - 마지막 갱신일: 2026-08-25
-- 갱신한 역할: Gemini QA (선수정 3건 · 체크리스트 작성 · 장비 실측)
+- 갱신한 역할: Gemini QA (G1 완료 · 결함 12건 처리)
 - 기준 Flutter 커밋: `87569ce` (feat: UI 전면 재설계 + Gemini QA 진입 전 학생측 P1 3건 수정)
 
 ## 1. 경영 요약
@@ -126,6 +126,7 @@
 
 | 날짜 | 역할 | 변경 내용 |
 |---|---|---|
+| 2026-08-25 | Gemini QA | **G1(학생 진입) 실기기 완료** — 공기계(학생) + 에뮬(교사) 2기기. **결함 12건 발견 · 9건 수정 · 3건 설계 이관.** 수정: 랜딩 QR 버튼 스캐너 직행, 320dp 코드 입력 레이아웃(제목 3줄→2줄), QR 스캔 실패 대안(8초 힌트·errorBuilder), `다음` 버튼 제거·6자리 자동 확인, 딥링크 화면 중복 스택, 입력칸 테두리 겹침(테마 focusedBorder), 버튼 폭 축소(Column center), 나가기 다이얼로그 세로 배치. **참여자 카운트가 처음으로 0이 아닌 값(1)을 표시** — Mercury 내내 검증 불가했던 경로가 열림. 플랫폼 제약 확인: 삼성 기본 카메라가 커스텀 스킴을 무시해 1-3은 웹 럜딩 없이 달성 불가. 설계 이관 3건은 모두 **세션 라이프사이클**로 수렴(Exit-01 leftAt 확정, Exit-03 종료 상태 부재, Exit-04 문구 불일치) |
 | 2026-08-25 | Gemini QA | **Gemini QA 준비 완료.** `gemini_qa.html` 신규 작성 (항목 90개, `mercury_qa.html` 형식) — 진행 순서를 CORE(G0~G4·S) → ROLE SWAP(G7) → STABILITY(G6) → EXTENDED(G5·G8) → REGRESSION(GR)으로 분리하고, 핵심 PASS를 공기계1+에뮬1의 1:1 양방향 E2E로, 단일 마일스톤을 G4-3(학생 실투표 → 교사 득표 바 실시간 갱신)으로 확정. **S 섹션 신설** — Firestore 보안 규칙 실검증 9항목(S-2·S-7·S-8은 Apollo 진입 차단 조건). 장비 실측: 교사 Pixel_6 AVD(`google_apis`/API 34/411dp), 학생 SM-A305N(API 30/320dp). **PC 물리 마이크 없음** 확인 → 에뮬 STT 불가, 1라운드=학생 STT · G7=교사 STT로 분담해 양쪽 다 실기기 검증. 신규 **Mercury-Redesign-01**: 구 탭 3종(`facilitator_tab`·`student_tab`·`display_tab`, 합 1,129줄)이 사재 코드로 확인 — G8 순회 대상과 Mercury-Report-07 범위 정정, **교사 수동 의견 입력 UI가 대체 없이 소실되어 현재 의견 생성 경로는 STT 단일**임을 기록 |
 | 2026-08-25 | Gemini QA 선수정 | **Gemini 진입 전 학생측 P1 3건 수정**(실기기 미검증). ① `student_session_screen.dart`: `listenToSession()`을 `build()`→`initState`로 이관, `_sessionStream` 필드 신설 — setState마다 Firestore 5개 구독이 끊겼다 재생성되던 문제(Mercury-3-Student-01). ② QR 딥링크(Mercury-Share-01): `deep_link_service.dart`에 `buildJoinUri()`/`parseScanned()` 추가, QR 생성 6곳을 `moamal://join/{code}`로 교체, **앱 내 스캐너의 `length==6` 판정도 함께 교체**(안 하면 기존 QR 참여가 깨짐). `main.dart` 수신 경로도 수정 — 이름 입력 화면 건너뛰던 것을 `StudentProfileScreen` 경유로, 세션 존재 확인 추가, `pushReplacement`→`push`, `codeStream()` 구독을 분기 앞으로 이동. ③ `_handleForceStart()`: 잠금 해제를 early-return 앞으로 이동 — 발언 완료(`done`) 학생은 교사가 [시작]을 눌러도 마이크가 영구 잠기던 문제(Mercury-3-Student-03, **P2→P1 상향**). `flutter analyze` 신규 오류 0건 |
 | 2026-08-24 | Flutter UI/UX | **Mercury-3-Student-02 · Mercury-Layout-01 코드 수정**(실기기 미검증). `student_session_screen.dart`: forceStop 배너 kInk→kRed, 닫기(×) 추가, 중복 SnackBar 제거, `_forceStopBannerVisible`(배너)와 `_forceStopped`(마이크 잠금) 상태 분리 — 배너 닫기가 교사 강제중지를 무력화하지 않도록. `responsive.dart`: 좁은 폭 하한 신설(`AppBreakpoints.narrow=360`, `isNarrow`, `dialogInsetH()`). `landing_screen.dart`: PIN 패드 고정 60dp→LayoutBuilder 역산(44~60dp), 코드입력·제목 다이얼로그 `scrollable: true`, 세션 선택 다이얼로그 전체 폭 세로 버튼 전환. 신규 발견 Mercury-3-Student-03(P2, forceStart early-return으로 마이크 잠금 미해제 가능) |

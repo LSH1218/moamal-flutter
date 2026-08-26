@@ -233,7 +233,7 @@ multiDexEnabled = true
 | 화면 | 파일 | 설명 |
 |------|------|------|
 | 랜딩 | `lib/screens/common/landing_screen.dart` | 교사/학생 역할 선택, 슈퍼바이저 모드 |
-| 학생 참여 | `lib/screens/student/join_screen.dart` | 코드 입력 또는 QR 스캔으로 참여 |
+| 학생 참여 | `lib/screens/student/join_screen.dart` | 코드 입력·QR 스캔·이름 번호 입력(`StudentProfileScreen`) |
 | 교사 홈 | `lib/screens/teacher/teacher_home_screen.dart` | 세션 생성·관리, QR 공유 |
 | 학생 세션 | `lib/screens/student/student_session_screen.dart` | 의견 제출, 투표 |
 
@@ -255,9 +255,19 @@ multiDexEnabled = true
 
 `lib/screens/student/join_screen.dart`
 
-- 코드 직접 입력 (`TextField` 6자리) 또는 **"QR 코드로 참여"** 버튼
+학생 진입 경로는 **세 가지**이며 세 경로 모두 `JoinScreen`→`StudentProfileScreen`(이름·번호)→`StudentSessionScreen` 흐름을 탄다.
+**이름 입력 화면을 건너뛰면 `participants` 등록이 빠져 교사 화면에 참여자로 잡히지 않는다.**
+
+| 경로 | 진입 |
+|---|---|
+| 코드 직접 입력 | 랜딩 `코드 입력` → 자체 키패드 6자리 → **자동 확인**(버튼 없음) |
+| 앱 내 QR | 랜딩 QR 버튼 → **스캐너 직행** → 자동 참여 |
+| 딥링크 | `moamal://join/{code}` → `main.dart` `_joinWithCode()` |
+
+- 코드 직접 입력 (자체 키패드 6자리) 또는 **"QR 코드 찍기"** 버튼
 - QR 스캔: `mobile_scanner` 패키지, `QrScanScreen` (전체화면 카메라 + 안내 프레임)
 - 스캔 성공 시 `DeepLinkService.parseScanned()`로 세션 코드 추출 → 자동 참여
+- 스캔 실패 대비: 하단 `코드 직접 입력하기` 상시 배치, **8초 미인식 시** 문구 전환·강조, `errorBuilder`로 카메라 불가 안내
   - **딥링크(`moamal://join/XXXXXX`)와 평문 6자리를 모두 허용** — 이전에 배포된 QR 호환 유지
   - QR 생성부를 딥링크로 바꿀 때 이 판독부를 함께 수정하지 않으면 앱 내 QR 참여가 깨진다
 
