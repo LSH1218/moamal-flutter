@@ -249,7 +249,7 @@
       <div class="step-num">1</div>
       <div style="flex:1">
         <div class="section-title">학생 진입 <span class="core-tag">CORE</span> <span class="fix-badge">선수정 검증</span></div>
-        <div class="section-sub">코드 입력 · QR 참여 · 이름 입력 · 뒤로 가기 스택</div>
+        <div class="section-sub">코드 입력 · QR 참여 · 이름 입력 · 뒤로 가기 스택 — <b>결함 12건 발견 · 9건 수정 · 3건 이관</b></div>
       </div>
       <span class="section-count" id="cnt-sec-1">0/0</span>
       <span class="chevron">▾</span>
@@ -267,6 +267,26 @@
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-8</b> 발표 화면에서 뒤로 가기 → 이름 입력 화면 복귀 (<b>블랙스크린 아님</b>)<span class="check-note">스택: 랜딩 → 코드입력 → 이름입력 → 발표. 딥링크 경로도 동일해야 함</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-9</b> 입력한 이름·번호가 교사 화면 학생 목록에 정확히 표시</span></label>
       </div>
+
+      <div class="divider-label">G1 진행 중 발견·수정된 것 — 재확인 항목</div>
+      <div class="info-note"><span class="icon">ℹ</span><span><b>G1에서 결함 12건이 나왔다 — 9건 수정, 3건 설계 이관.</b> 아래는 체크리스트에 없던 항목으로, 수정 후 실기기에서 확인했거나 아직 확인이 남은 것들이다. 상세는 <code>BUG_LOG_v2.md</code> Gemini 섹션.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-10</b> 랜딩 QR 버튼 → <b>스캐너 직행</b> <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Join-01 — 이전엔 코드 입력 화면으로만 가서 QR 버튼이 사실상 장식이었다</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-11</b> 320dp에서 <b>코드 칸 6개·QR 버튼이 첫 화면에 보임</b> <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Join-02 — 가용 620dp vs 필요 690dp였다. 제목이 3줄로 쌓이던 것이 최대 원인</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-12</b> 6자리 입력 시 <b>자동 확인</b> + `코드를 확인하고 있어요` 표시 <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Join-04 — `다음` 버튼 제거. QR 경로는 원래 자동이었으므로 동작을 맞춘 것</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-13</b> 스캐너 <b>8초 미인식</b> → 문구 전환 + `코드 직접 입력하기` kYellow 강조 <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Join-03</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-14</b> <b>카메라 권한 거부</b> 시 안내 화면(검은 화면 아님) <span class="risk-badge">미확인</span><span class="check-note">`errorBuilder` 경로. 설정에서 카메라 권한을 끄고 QR 버튼을 눌러 확인한다</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-15</b> 딥링크 <b>2회 수신 후 뒤로 가기 3번</b>에 랜딩 도달 <span class="risk-badge">미확인</span><span class="check-note">Gemini-1-Deeplink-02 수정분. 수정 전에는 4번이 걸렸다(화면이 겹겹이 쌓임)</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-16</b> 이름 입력 칸 <b>테두리 한 겹</b> · `들어가기` <b>전체 폭</b> <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Profile-01·02 — 테마 `focusedBorder`가 커스텀 테두리 안에 겹쳐 그려졌고, Column 기본 정렬이 center라 버튼이 축소됐다</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>1-17</b> 나가기 다이얼로그 <b>세로 배치</b> · 글자 안 깨짐 <span class="new-badge">확인됨</span><span class="check-note">Gemini-1-Exit-02 — Mercury-Layout-01 세션 선택 다이얼로그와 동일 유형</span></span></label>
+      </div>
+
+      <div class="warn-note"><span class="icon">⚠</span><span><b>G1에서 발견했으나 고치지 않은 것 3건 — 모두 세션 라이프사이클 문제라 묶어서 설계 중이다.</b><br>
+        <b>Gemini-1-Exit-01</b> — 학생이 나가도 교사 화면 `참여` 수가 줄지 않는다. 퇴장 처리가 아예 없다. <b>`leftAt` 방식으로 결정</b>(앱개발 방 구현 대기)<br>
+        <b>Gemini-1-Exit-03</b> — <b>교사가 종료해도 학생 화면은 그대로다.</b> 세션에 종료 상태 개념 자체가 없어 학생이 계속 발언할 수 있다<br>
+        <b>Gemini-1-Exit-04</b> — 나가기 안내가 `다시 코드를 넣어야`라고 하지만 실제로는 코드 없이 재입장된다. 목적지 변경은 Exit-03 이후로 보류
+      </span></div>
+      <div class="info-note"><span class="icon">ℹ</span><span><b>G2 이후 판단할 것</b> — 학생 화면 마이크 버튼 크기(148dp, 폭의 46%). 지금은 교사 발문·투표 카드가 없어 화면이 가장 비어 있는 상태라 판단을 미뤘다. <b>G2에서 발문 카드가, G4에서 투표 카드가 채워진 뒤</b> 다시 본다.</span></div>
     </div>
   </div>
 
