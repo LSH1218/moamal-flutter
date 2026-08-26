@@ -7,6 +7,7 @@ import '../models/group_snapshot.dart';
 import '../models/idea.dart';
 import '../models/merge_log.dart';
 import '../models/participant.dart';
+import '../models/session_meta.dart';
 import '../models/session_state.dart';
 import 'moamal_repository.dart';
 
@@ -158,6 +159,18 @@ class FirebaseMoamalRepository implements MoamalRepository {
         .collection('participants')
         .doc(uid)
         .set({'leftAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<SessionMeta?> fetchSessionMeta(String sessionCode) async {
+    final snap = await _sessionRef(sessionCode).get();
+    if (!snap.exists) return null;
+    final data = snap.data() as Map<String, dynamic>?;
+    return SessionMeta(
+      sessionCode: sessionCode,
+      createdAt: (data?['createdAt'] as Timestamp?)?.toDate(),
+      endedAt: (data?['endedAt'] as Timestamp?)?.toDate(),
+    );
   }
 
   @override

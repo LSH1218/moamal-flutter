@@ -3,6 +3,7 @@ import '../models/group.dart';
 import '../models/idea.dart';
 import '../models/merge_log.dart';
 import '../models/participant.dart';
+import '../models/session_meta.dart';
 import '../models/session_state.dart';
 
 abstract class MoamalRepository {
@@ -15,6 +16,11 @@ abstract class MoamalRepository {
   Future<void> deleteApprovedGroup(String sessionCode, String groupId);
   Future<void> joinSession(String sessionCode, Participant participant);
   Future<String?> fetchSessionTitle(String sessionCode);
+
+  /// 세션 문서만 1회 조회 — 복귀 가능 여부 판단용.
+  /// 하위 컬렉션은 읽지 않는다(앱 시작 시 문서 read 1회).
+  /// 세션이 없으면 null.
+  Future<SessionMeta?> fetchSessionMeta(String sessionCode);
 
   // ── 세션 라이프사이클 ────────────────────────────────────────────────────
   /// 교사 종료 — 세션 문서에 endedAt 기록. 학생 화면이 이 값을 구독한다.

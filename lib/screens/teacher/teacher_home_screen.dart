@@ -160,11 +160,13 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     await prefs.remove('active_teacher_session');
   }
 
+  // 1시간을 넘기면 H:MM:SS로 표기한다. 분만 쌓으면 "1140:23" 같은 값이 나온다.
   String _formatElapsed() {
     final d = DateTime.now().difference(_sessionStart);
-    final m = d.inMinutes.toString().padLeft(2, '0');
+    final h = d.inHours;
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+    return h > 0 ? '$h:$m:$s' : '${d.inMinutes.toString().padLeft(2, '0')}:$s';
   }
 
   void _onGroupingUpdated() {

@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'models/session_meta.dart';
 import 'repositories/firebase_moamal_repository.dart';
 import 'services/auth_service.dart';
 import 'services/deep_link_service.dart';
@@ -99,19 +100,39 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
       return;
     }
 
-    // 교사 세션 복귀: 앱 재시작 시 진행 중이던 수업으로 돌아감
+    // 교사 세션 복귀: 앱 재시작 시 진행 중이던 수업으로 돌아감.
+    // **당일에 만들어졌고 아직 끝나지 않은 세션만** 복귀한다 (2026-08-26 대표 결정).
+    // 조건 없이 복귀하던 때는 어제 세션으로 돌아가 수업 시간이 "1140:23"처럼
+    // 표시되고, 이미 끝난 수업에 발언이 더 쌓일 수 있었다.
     final prefs = await SharedPreferences.getInstance();
     final activeSession = prefs.getString('active_teacher_session');
     if (activeSession != null && mounted) {
       final auth = context.read<AuthService>();
       if (auth.currentUid == null) await auth.signInAnonymously();
       if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => TeacherHomeScreen(existingCode: activeSession),
-        ),
-      );
+
+      final repo = context.read<FirebaseMoamalRepository>();
+      SessionMeta? meta;
+      try {
+        meta = await repo.fetchSessionMeta(activeSession);
+      } catch (_) {
+        // 조회 실패(오프라인 등)에는 복귀하지 않는다 — 판단 근거가 없으면 랜딩이 안전하다.
+        meta = null;
+      }
+      if (!mounted) return;
+
+      if (meta != null && meta.canResumeAt(DateTime.now())) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherHomeScreen(existingCode: activeSession),
+          ),
+        );
+      } else {
+        // 복귀 대상이 아니면 저장된 코드를 지운다 — 남겨두면 켤 때마다 조회만 반복한다.
+        // 필요하면 슈퍼바이저 모드의 '기존 세션 재개'로 코드를 넣어 들어갈 수 있다.
+        await prefs.remove('active_teacher_session');
+      }
     }
   }
 
