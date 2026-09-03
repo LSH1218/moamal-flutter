@@ -60,11 +60,15 @@ Flutter 기반 앱. 학생이 제출한 의견을 AI가 실시간으로 클러�
 
 ### sessions/{sessionCode}
 ```
-sessionCode: String
-title:       String
-voteOpen:    bool
-ownerUid:    String   ← 교사 UID
-updatedAt:   Timestamp
+sessionCode:    String
+title:          String
+voteOpen:       bool
+ownerUid:       String    ← 교사 UID
+updatedAt:      Timestamp
+createdAt:      Timestamp?  ← 세션 복귀 판정용 (Mercury-Session-03/04, 2026-08-26)
+endedAt:        Timestamp?  ← 교사 종료 시 기록, null이면 진행 중 (Gemini-1-Exit-03)
+groupSnapshot:  List<Map>?  ← 그룹 구성 스냅샷(하위 컬렉션 아닌 필드), idea id만 저장 (Mercury-Session-02)
+groupSnapshotAt: Timestamp?
 ```
 
 ### teacher_notes/{noteId}
@@ -79,6 +83,8 @@ createdAt: Timestamp
 id:        String
 text:      String
 speaker:   String
+source:    String    ← "stt" 등
+authorUid: String    ← 작성자 UID, 규칙이 create 시 강제(Common-Rules-01, 2026-08-27 배포)
 createdAt: Timestamp
 ```
 
@@ -100,10 +106,12 @@ revision:    int
 
 ### participants/{uid}
 ```
-number:   int      ← 입장 순번 (1번, 2번...)
-name:     String   ← 학생 입력 이름
+number:   int        ← 입장 순번 (1번, 2번...)
+name:     String     ← 학생 입력 이름
 joinedAt: Timestamp
+leftAt:   Timestamp?  ← 퇴장 시각, null이면 접속 중 (Gemini-1-Exit-01, 2026-08-26)
 ```
+`activeParticipants`(접속 중, `leftAt == null`)와 `participants` 전체(누적)를 용도에 따라 구분해서 쓴다 — 전자는 LIVE 통계·마이크 제어·투표율 분모, 후자는 리포트.
 
 ---
 
@@ -154,18 +162,22 @@ joinedAt: Timestamp
 
 ## 보안 규칙 요약
 
+**2026-08-27 배포 기준** (`Common-Rules-01`·`Common-Rules-03` 반영):
+
 | 경로 | 읽기 | 쓰기 |
 |------|------|------|
-| sessions | 로그인 사용자 | 교사(ownerUid) |
-| ideas | 로그인 사용자 | 로그인 사용자 |
-| votes | 교사 또는 본인 | 본인만 |
+| sessions | 단건 조회만(`get`) — **목록 조회(`list`) 차단** | 교사(ownerUid) |
+| ideas | 로그인 사용자 | 생성: **본인 UID를 `authorUid`로 기록해야 함**. 수정: 교사 또는 작성자 본인만(`authorUid` 변경 불가) |
+| votes | 교사 또는 본인 | 본인만. ⚠ **투표 마감 후에도 본인 쓰기 가능**(`Common-Rules-02`, 의도적 미해결 — Gemini 종료 직후 적용 예정) |
 | approvedGroups | 로그인 사용자 | 교사만 |
-| participants | 교사 또는 본인 | 본인 또는 교사 |
+| participants | 교사 또는 본인 | 본인 또는 교사 (`leftAt` 포함) |
 | teacher_notes | 로그인 사용자 | 교사만 |
 | mergeLogs | 교사만 | 교사만 |
 | sttRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 | geminiRateLimits | 차단 | 차단 (Functions Admin SDK만) |
 | openaiRateLimits | 차단 | 차단 (Functions Admin SDK만) |
+
+학생은 `votes`·`participants` 전체 목록은 조회할 수 없고 본인 문서만 읽을 수 있다 — 비밀투표 유지 목적(`Common-Rules-04`, 결과는 빔프로젝터로만 공개).
 
 ---
 
@@ -234,8 +246,12 @@ multiDexEnabled = true
 |------|------|------|
 | 랜딩 | `lib/screens/common/landing_screen.dart` | 교사/학생 역할 선택, 슈퍼바이저 모드 |
 | 학생 참여 | `lib/screens/student/join_screen.dart` | 코드 입력·QR 스캔·이름 번호 입력(`StudentProfileScreen`) |
-| 교사 홈 | `lib/screens/teacher/teacher_home_screen.dart` | 세션 생성·관리, QR 공유 |
+| 교사 홈 | `lib/screens/teacher/teacher_home_screen.dart` | 세션 생성·관리, QR 공유, AI 누적 요약 |
 | 학생 세션 | `lib/screens/student/student_session_screen.dart` | 의견 제출, 투표 |
+| 정리(원문·승인·투표) | `lib/screens/teacher/organize_screen.dart` | 의견 이동·병합, 그룹 승인, 투표 시작/마감 |
+| 마이크 제어 | `lib/screens/teacher/mic_control_screen.dart` | 학생별 [끄기]/[켜기]/[말하기] 원격 제어 (2026-08-27 켜기·말하기 분리) |
+| 빔 프로젝터 | `lib/screens/teacher/beam_projector_screen.dart` | 학급 전체 공유 화면 — 투표 후보·최종 결과 표시 |
+| 리포트 | `lib/screens/teacher/report_screen.dart` | AI 요약 생성, 수업 끝내기 |
 
 ---
 
@@ -284,7 +300,7 @@ multiDexEnabled = true
 - `qr_flutter` 패키지 사용
 - **QR 페이로드는 `DeepLinkService.buildJoinUri(code)` = `moamal://join/{code}`** (2026-08-25 변경)
   - 폰 기본 카메라로 찍으면 앱이 열린다 (`AndroidManifest.xml` intent-filter `scheme=moamal, host=join`)
-  - QR 생성 지점은 6곳 — `_QrSheet`, `_QrFullScreen`, `beam_projector_screen`(2), `display_tab`, `facilitator_tab`
+  - QR 생성 지점은 4곳 — `_QrSheet`, `_QrFullScreen`, `beam_projector_screen`(2). (`display_tab`·`facilitator_tab`은 죽은 코드로 확인되어 2026-08-26 삭제됨 — Mercury-Redesign-01)
   - ⚠ **앱 미설치 기기는 `moamal://`로 열 수 없다.** 웹 럜딩 URL 도입은 미결정
 
 ---
@@ -312,9 +328,17 @@ multiDexEnabled = true
 - [x] Google Sign-In SHA-1 키 Firebase Console 등록 완료 (2026-08-13)
 - [x] STT gpt-transcribe 엔드투엔드 검증 완료 (2026-08-14)
 - [x] openaiProxy 502 에러 해결 완료 (2026-08-18) — `gpt-5.6-luna`가 temperature를 미지원해 파라미터 전체 제거
-- [ ] **웹 럜딩 페이지** — QR 딥링크가 `moamal://`라 앱 미설치 기기 미대응 (`BUG_LOG_v2.md` Mercury-Share-01)
+- [x] 사재 코드 정리 완료 (2026-08-26) — `tabs/` 3개 파일(`display_tab`·`facilitator_tab`·`student_tab`) 1,129줄 삭제, 죽은 코드로 확인됨(Mercury-Redesign-01)
+- [x] Firestore 규칙 배포 완료 (2026-08-27) — `Common-Rules-01`(ideas 작성자 검증)·`Common-Rules-03`(sessions 목록 조회 차단). **배포 후 실기기 확인(학생 의견 제출 → `authorUid` 기록) 아직 안 함 — 다음 세션 최우선**
+- [x] Gemini QA G0~G4 완료 (2026-08-27) — 1:1 실기기 검증, 핵심 마일스톤(학생 투표→교사 실시간 반영) 통과. 상세는 `gemini_qa.html`·`BUG_LOG_v2.md`
+- [x] Gemini QA G6(네트워크·생명주기, STABILITY) 완료 (2026-09-03) — 백그라운드 복귀·비행기모드·오프라인 제출·강제종료 7개 전부 실기기 검증. `Common-Network-01`(P1, Mercury v1부터 미검증) 재현 안 됨으로 종결, `Mercury-Session-02` 스냅샷 복원 실기기 확인(승인 경로). 신규 발견: 학생 세션 강제종료 시 자동 복귀 로직 부재(`Gemini-6-Session-01`). 상세는 `gemini_qa.html`·`BUG_LOG_v2.md`
+- [x] Gemini S 섹션(Firestore 보안 규칙 실검증) 완료 (2026-08-28) — S-1~S-10 전부 Firestore 에뮬레이터로 통과, Apollo 진입 차단 조건(S-7·S-8·S-9) 충족
+- [x] Gemini QA GR(회귀 체크) 완료 (2026-09-03) — R-1~R-8 전부 실기기 통과. `Mercury-Report-06`(P1, 리포트 생성 버튼 무반응) 실기기 검증으로 종결. 신규 발견: 슈퍼바이저 "기존 세션 재개" 시 세션 소유권 불일치로 교사 전용 쓰기 전부 실패(`Gemini-R-Supervisor-01`). **CORE·S·G7·G6·GR 전부 완료 — Apollo 진입 판단만 남음**(G5·G8 확장 항목은 대표 판단으로 스킵). 상세는 `gemini_qa.html`·`BUG_LOG_v2.md`
+- [ ] **웹 랜딩 페이지** — QR 딥링크가 `moamal://`라 앱 미설치 기기 미대응 (`BUG_LOG_v2.md` Mercury-Share-01)
 - [ ] **교사·학생 수동 텍스트 입력 복원 여부** — 재설계로 `student_tab`이 끊기면서 현재 `ideas` 생성 경로가 STT 단일 (`BUG_LOG_v2.md` Mercury-Redesign-01)
-- [ ] 사재 코드 정리 — `tabs/` 3개 파일 1,129줄 미참조
+- [ ] `Common-Rules-02` — 투표 마감 후에도 학생 `votes` 쓰기 가능. 의도적으로 미적용, Gemini QA 종료 직후 규칙 추가 예정(현황판 §15)
+- [ ] 학생 세션 강제종료 후 자동 복귀 로직 (`Gemini-6-Session-01`, 등급 확정 전략기획 판단 필요)
+- [ ] 슈퍼바이저 "기존 세션 재개" 소유권 불일치 (`Gemini-R-Supervisor-01`) — 슈퍼바이저 모드 자체가 아래 항목대로 제거 예정이라 그때 함께 소멸
 - [ ] firebase-functions 최신 버전 업그레이드 (`npm install --save firebase-functions@latest`)
 - [ ] Firebase 개발/운영 환경 분리
 - [ ] 슈퍼바이저 모드 — 출시 전 제거 또는 숨김 처리

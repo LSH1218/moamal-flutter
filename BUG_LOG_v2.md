@@ -103,7 +103,7 @@
   부모(`TeacherHomeScreen._generateReport`)도 기존대로 `_meetingReport`를 갱신하므로 재진입 시 결과가 유지된다.
   실패 시 `null`이 오며 이때는 기존 리포트를 지우지 않는다
 - **파일**: `lib/screens/teacher/report_screen.dart`, `lib/screens/teacher/teacher_home_screen.dart` — `_generateReport()`
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**
+- **상태**: ✅ 코드 수정 완료 · **실기기 검증 완료** (2026-09-03, GR R-8) — "AI 요약 생성" 탭 즉시 "생성 중..."으로 버튼 전환, 화면 재진입 없이 그 자리에서 항목별 요약이 정상 표시됨. "리포트 저장/공유"도 활성화되어 네이티브 공유 시트에 리포트 본문("학급회의 요약 리포트")까지 정상 노출 확인
 
 ### [Mercury-Session-02] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 앱 재시작(핫 리스타트 포함) 후 세션에 복귀하면 **교사가 수행한 그룹 병합·이동·승인 결과가 모두 사라지고** AI가 처음부터 다시 그룹화함.
@@ -132,7 +132,11 @@
 - **테스트**: `test/group_snapshot_restore_test.dart` 6건 — 복원·재그룹화 차단·중복 복원 방지·원문 삭제 그룹 제외·빈 스냅샷·저장 콜백
 - **파일**: `lib/models/group_snapshot.dart`, `lib/services/gemini_grouping_engine.dart`,
   `lib/repositories/*` (`saveGroupSnapshot`), `lib/screens/teacher/teacher_home_screen.dart`
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (교사 앱 강제 종료 → 복귀 시 병합 그룹·수정 제목 유지 확인 필요)
+- **상태**: ✅ 코드 수정 완료 · **부분 실기기 검증** — 2026-09-03 Gemini G6 6-7에서 승인(approve) 시나리오 확인:
+  세션 NONCNN(그룹 3개·승인 2개) 상태에서 교사 앱 `am force-stop` → 재실행 → `active_teacher_session`으로 정상 복귀,
+  "그룹 3개 · 승인 2개" **소실 없이 유지됨** — 스냅샷 복원(`restoreSnapshot`)이 실기기에서 처음으로 확인됨.
+  단 이번 세션은 **승인만 하고 병합(`mergeGroups`)·그룹명 수정은 하지 않은 상태**라 그 경로까지 커버하진 못했다 —
+  병합 후 강제종료 시나리오는 별도로 재확인 필요
 
 ### [Mercury-Session-03] ← Section 10 QA 중 발견 (2026-08-24)
 - **현상**: 앱 재시작 후 리포트의 "수업 N분" 경과 시간이 리셋됨. QA 중 39:29 → 02:05로 초기화
@@ -323,7 +327,7 @@
   `widget.sessionStream ?? widget.repo.listenToSession(...)` 폴백을 삭제하고 `sessionStream`을
   **nullable → required**로 바꿨다. 이제 스트림을 넘기지 않는 호출부는 **컴파일 자체가 되지 않아**
   같은 버그가 재발할 수 없다. `_goToSummary()`에는 `_goToProjector()`와 같은 `_sessionStream == null` 가드를 추가했다
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (Gemini G2·G4에서 확인)
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, Gemini G2-5·G4에서 확인 — 마이크·투표 반복 조작해도 데이터 유지, 깜빡임 없음)
 
 ### [Mercury-3-Student-02] ← 재설계 후 발견
 - **현상**: forceStop 수신 시 UI가 명세와 다름
@@ -342,7 +346,7 @@
     → `_forceStopBannerVisible`(배너, 학생이 닫기 가능)과 `_forceStopped`(잠금, 교사 forceStart로만 해제)로 분리.
     배너를 닫아도 `_micArea()`가 kDisabled 마이크 + "마이크 꺼짐" + "선생님이 마이크를 잠시 껐어요"로
     잠금 상태를 계속 보여주므로 학생이 이유를 알 수 있다
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (Gemini QA Section 9-5에서 확인)
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, Gemini G3 3-2·3-3에서 확인 — kRed 배너, SnackBar 중복 없음, 배너 닫아도 마이크 잠금 유지)
 
 ### [Mercury-3-Student-03] ← 2026-08-24 Student-02 수정 중 코드 확인으로 발견
 - **현상**: 교사가 forceStop → forceStart를 보내도 학생 마이크 잠금이 풀리지 않을 수 있음
@@ -360,7 +364,7 @@
   - 자동 녹음 시작 조건을 `_onTap`과 동일하게 정렬 — `idle` 또는 `done`에서 시작하되 `done`이면 `idle`로 리셋 후 녹음.
     기존 `!= idle` 조건만 유지했다면 잠금은 풀려도 교사가 기대한 자동 녹음은 여전히 안 걸렸다
 - **재현 방법**: 학생이 1회 발언 후 초안 제출 완료(`done` 상태) → 교사 [중지] → 교사 [시작] → 학생 마이크가 눌리는지 확인
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (Gemini G3에서 확인)
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, Gemini G3 3-4·3-5에서 확인 — 발언 이력 있는/없는 학생 둘 다 [중지]→[말하기]로 정상 재개)
 
 ### [Mercury-4-Organize-01] ← 재설계 후 발견
 - **현상**: OrganizeScreen 승인 탭에서 투표 진행 중 "승인하기/승인 취소" 버튼이 비활성화되지만 시각적 피드백이 없음 — 탭해도 반응 없어 학생이 버그로 오해할 수 있음
@@ -373,7 +377,7 @@
   `_handleTap()`으로 분기: ① 투표 중(`!canToggle`)이면 SnackBar "투표 진행 중에는 변경할 수 없어요" ②
   승인 취소(`approved`)면 확인 다이얼로그(교사 종료 다이얼로그와 동일 톤 — kRed "!" 배지, "유지하기"(kGreen)/"취소"(kRed outline))
   ③ 그 외엔 바로 승인. 투표 중에도 탭에 반응이 생기므로 재탭 습관 자체가 사라지고, 승인 취소는 항상 확인을 거친다
-- **상태**: ✅ 해결 · **실기기 미검증**
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, Gemini G4 4-7 — "투표 진행 중에는 변경할 수 없어요" 스낵바 정상 표시)
 
 ### [Mercury-4-Organize-02] ← 재설계 후 발견
 - **현상**: 원문 탭에서 "새 그룹"으로 의견 이동 시 생성된 그룹에 AI 제목이 없음 (`aiTitle: null`) → Jaccard 폴백이 의견 텍스트 전체를 그룹 제목으로 사용 → 매우 긴 제목 표시
@@ -470,6 +474,8 @@
   - `errorBuilder` 추가 → 카메라를 열 수 없으면 `_CameraUnavailable`(이유 + 동일 버튼) 표시. 검은 화면 제거
   - 좌상단 화살표도 같은 `_fallbackToCode()`를 타도록 통일, 타이머는 dispose·인식 성공 시 취소
 - **상태**: ✅ **해결** — 2026-08-25 실기기 확인. 하단 버튼 상시 표시, 8초 경과 시 문구 전환·kYellow 강조 동작
+- **추가 검증** (2026-08-27): `appops`로 카메라 강제 거부 후 재확인 — 다이얼로그 없이 즉시 `_CameraUnavailable`("카메라를 열 수 없어요") 노출, "코드 직접 입력하기"로 정상 이탈됨
+- **파생 발견 — 미해결**: `errorBuilder`가 그리는 `_CameraUnavailable`(중앙 정렬)이 항상 그려지는 `SafeArea` 레이어의 스캔 가이드 박스·안내 문구·하단 버튼과 **같은 화면에 겹쳐 보인다.** `Stack`에서 `MobileScanner`(카메라 실패 시 `_CameraUnavailable`)와 `SafeArea` 오버레이가 항상 함께 렌더링되기 때문 — 카메라 정상일 때는 오버레이가 카메라 미리보기 위에 자연스럽게 얹히지만, 실패 시에는 검은 배경의 `_CameraUnavailable` 콘텐츠와 오버레이 텍스트·버튼이 겹쳐 "코드 직접 입력하기" 버튼이 2개로 보이는 등 시각적으로 어수선하다. 기능은 둘 다 `_fallbackToCode()`로 동일하게 동작해 실사용에 지장은 없다. 등급 P3
 ### [Gemini-1-Join-04] ← G1 재확인 중 발견 (2026-08-25)
 - **현상**: 코드 입력 화면의 `다음` 버튼이 **불필요하게 한 단계를 더 요구한다.** 세션 코드는 길이가 정확히 6자리로 고정이므로 마지막 글자가 들어온 시점에 확인할 수 있는데, 학생이 키패드 위 `다음`을 한 번 더 눌러야 진행된다
 - **일관성 문제**: **QR 경로는 이미 자동 진행한다.** `_scanQr()`가 스캔 성공 시 `_verify()`를 직접 호출하므로 버튼을 거치지 않는다. 같은 화면의 두 진입 방식이 서로 다르게 동작했다
@@ -509,7 +515,7 @@
 - **등급**: P3 (참여 자체는 정상)
 - **수정** (2026-08-25): `Navigator.popUntil(context, (route) => route.isFirst)`로 스택을 랜딩까지 걷어낸 뒤 push.
   딥링크는 **항상 랜딩 위에 한 겹만** 쌓인다
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증** (딥링크 2회 전달 후 뒤로 가기 3번에 랜딩 도달하는지)
+- **상태**: ✅ **해결 · 실기기 검증 완료** (2026-08-27) — 유효 코드(QWKMIV)로 딥링크 2회 전달 후 뒤로 가기 **1번**만에 랜딩 도달. 예상(3번)보다 낫다 — `popUntil`이 두 번째 딥링크 시점에도 스택을 완전히 걷어내기 때문
 ### [Gemini-1-Profile-01] ← G1 1-4 진행 중 발견 (2026-08-25)
 - **현상**: 이름·번호 입력 화면에서 **포커스된 입력 칸에만 테두리가 두 겹**으로 그려진다. 바깥은 우리가 그린 kGreen 2px, 안쪽에 같은 초록 테두리가 하나 더 생겨 네모 안에 네모가 든 모양이 된다. 포커스가 없는 칸은 정상(한 겹)
 - **원인**: `app_theme.dart:61-67`의 `inputDecorationTheme`에 **`focusedBorder`(kGreen, 2px)** 가 정의돼 있다.
@@ -543,7 +549,52 @@
   이전 구현이었다면 딥링크로 들어온 학생은 참여자로 잡히지 않았을 것
 - **상태**: ✅ G1 1-1 · 1-2 · 1-4 · 1-5 · 1-9 통과
 
-### [Gemini-1-Exit-01] ← G1 마무리 중 발견 (2026-08-25)
+### [Gemini-1-QR-01] ← 실기기 QR 스캔 중 발견 (2026-08-28)
+- **현상**: 학생 실기기(R59MA03BRCN)에서 `QR 코드 찍기`로 카메라 화면에 들어갔을 때 **카메라 프리뷰 방향이 어긋나 있었음**. 기기를 가로↔세로로 몇 번 돌리자 정상으로 돌아옴. 재진입 시 정상 여부는 확인 못 함(스크린샷 시도 중 재현이 이미 풀려 있었음)
+- **원인 가설(코드 근거 있음, 미확정)**: `main.dart:23-27`의 `SystemChrome.setPreferredOrientations`가 폰에서도 `landscapeLeft`/`landscapeRight`를 열어둔다 — 주석은 "폰은 세로 고정, 실제 판단은 런타임 MediaQuery"라 되어 있지만 이는 **레이아웃만 세로로 그리는 것**이지 OS 차원의 회전 잠금이 아니다. 즉 폰이 물리적으로 기울면 실제 가로 모드 전환이 일어날 수 있다. 여기에 `AndroidManifest.xml`의 `android:configChanges="orientation|..."`가 회전 시 Activity 재시작을 막아버려, `mobile_scanner`(`join_screen.dart` `QrScanScreen`)의 CameraX 프리뷰가 **최초 진입 시 회전값을 잘못 캐시했다가 실제 회전 이벤트가 들어와야 재계산**되는 알려진 플러그인 패턴과 일치한다(`mobile_scanner` GitHub에도 유사 리포트 다수)
+- **영향**: 학생이 QR 스캔 진입 직후 화면이 이상해 보여 당황하거나 스캔을 포기하고 코드 직접 입력으로 이탈할 가능성. 스스로 해소되는 경우가 많아 보이나 재현 조건이 좁혀지지 않음
+- **등급**: P3 (일시적·자가 해소, 그러나 첫인상에 영향)
+- **파일**: `lib/main.dart:23-27`(orientation 설정), `lib/screens/student/join_screen.dart` `QrScanScreen`(`MobileScanner` 사용부), `android/app/src/main/AndroidManifest.xml`(`configChanges`)
+- **검증 필요**: 재현 조건 특정 — ① 스캔 화면 진입 직후 즉시 vs 몇 초 후, ② 자동 회전 켜짐/꺼짐 상태별 재현 여부, ③ 폰을 완전히 세로 고정(`portraitUp`만 허용)했을 때도 재현되는지. 재현되면 폰 한정으로 `landscapeLeft/Right` 허용을 제거하는 것도 후보 수정안
+- **상태**: 🟡 관찰됨 · 재현 조건 미확정 · 수정 보류(자가 해소돼 QA 진행 차단 아님)
+
+### [Gemini-7-TeacherNote-01] ← G7 7-3 교사 STT 반영 확인 중 발견 (2026-08-28)
+- **현상**: 교사가 마이크로 발문("회의 시작하자.")을 말하면 `teacher_notes`에 정상 저장되고 AI 그룹화 프롬프트에도 반영되지만, **학생 화면에는 절대 표시되지 않았다.** 학생 화면엔 노란 강조선의 "질문 카드"(`_questionCard`) UI가 이미 완성되어 있었는데 항상 비어 있었음
+- **원인**: `student_session_screen.dart`의 질문 카드 로직이 `state.ideas`(학생 의견 컬렉션)에서 `idea.speaker == '교사'`인 항목을 찾도록 되어 있었다. 그런데 교사 발문은 `ideas`가 아니라 완전히 다른 컬렉션인 `teacher_notes`에 저장되고(`addTeacherNote()`), `ideas.speaker`는 학생이 의견을 낼 때 **항상 `'학생'`으로 하드코딩**된다(`_submitIdea()`). `'교사'`를 넣는 코드는 애초에 어디에도 없어 이 조건은 영원히 거짓이었다 — 처음부터 한 번도 작동한 적 없는 죽은 코드
+- **영향**: 학생이 교사의 발문/지시를 화면으로 확인할 방법이 없었음(마이크로 듣는 것 외엔). 기능은 다 만들어져 있었는데 배선만 잘못됨
+- **등급**: P2 (기능 완전 미작동, 그러나 우회 수단 있음 — 음성으로는 전달됨)
+- **파일**: `lib/screens/student/student_session_screen.dart`(`_teacherNote` 필드·`_listenTeacherNote()`), `lib/repositories/moamal_repository.dart`·`firebase_moamal_repository.dart`(`listenToLatestTeacherNote()`)
+- **수정 (2026-08-28)**: `teacher_notes` 컬렉션에서 `createdAt` 내림차순 최신 1건을 실시간 구독하는 `listenToLatestTeacherNote(sessionCode)`를 레포지터리에 신설. `student_session_screen.dart`에 `_teacherNoteSub`/`_teacherNote`를 추가해 다른 실시간 구독(`_myVoteSub`, `_forceStartSub` 등)과 같은 패턴으로 `initState()`에서 구독·`dispose()`에서 해제. `state.ideas` 스캔하던 죽은 코드 제거, `_compactLayout`/`_mediumLayout`에 `Idea?` 대신 `String?`으로 넘기도록 시그니처 변경. 규칙 변경 불필요(`teacher_notes`는 이미 `allow read: if signedIn();`이라 학생도 읽을 수 있었음 — 안 읽고 있었을 뿐)
+- **검증**: `flutter analyze` 0 · `flutter test` 23/23. 새 빌드로 재현 — 교사(공기계) "회의 시작하자." 발문 → 학생(에뮬) 화면에 "선생님이 물었어요 / 회의 시작하자." 카드 즉시 표시 확인
+- **상태**: ✅ 해결됨 · 실기기 검증 완료
+
+### [Common-Beam-01] ← 사용자 직접 QA 중 발견 (2026-08-28)
+- **현상**: 투표를 진행하고 "투표 닫고 결과 확정"까지 마친 뒤, 교사가 정리 화면에서 승인된 그룹을 **전부 취소**하면 빔프로젝터 화면이 QR 화면으로 돌아가지 않고 **"투표 결과 · N명 참여" 헤더만 남고 그 아래가 완전히 텅 빈 화면**이 된다. 학생들이 보는 큰 화면이 아무 설명 없이 비어버리는 것
+- **재현 경로**: ① 의견 제출 → AI 그룹화 → 승인 → 투표 열기 ② 학생이 투표 ③ 투표 닫고 결과 확정(`voteOpen=false`) ④ 정리 화면에서 승인된 그룹 3개를 전부 승인 취소(`deleteApprovedGroup`) ⑤ 빔프로젝터 화면 진입 → 빈 화면
+- **원인**: `beam_projector_screen.dart`의 `_stageOf()`가 4단계(`joining`/`collecting`/`voting`/`results`)를 오직 `ideas.isEmpty`와 `voteOpen`과 `votes.isNotEmpty` 세 조건만으로 판단하고, **`approvedGroups`가 비어있는 경우를 전혀 고려하지 않는다.** `ideas`가 한 번이라도 생기면 `joining`(QR) 단계로는 다시 못 돌아가고, `voteOpen=false`이면서 `votes`가 남아있으면 무조건 `results` 단계로 간다. 이 상태에서 `approvedGroups`가 비어있으면 `_buildResultsPortrait/Landscape`의 `sorted` 리스트가 빈 배열이 되어 `for` 루프가 아무것도 렌더링하지 않는다 — 헤더만 남고 완전히 빈 화면이 되는 구조적 공백
+- **영향**: 실제 수업에서 투표 결과 확정 후 교사가 그룹을 재검토하다 전부 취소하면(그룹명을 다시 짜려고 하거나 실수로), 빔프로젝터에 아무 안내 없이 빈 화면이 뜬다. 학생들 앞 큰 화면이라 파급력이 있음
+- **등급**: P2 (드문 경로지만 재현 조건이 명확하고, 안내 문구 없이 완전히 빈 화면이라 첫인상 임팩트가 큼)
+- **파일**: `lib/screens/teacher/beam_projector_screen.dart` `_stageOf()`(12-19행), `_buildResultsPortrait()`/`_buildResultsLandscape()`
+- **수정 (2026-08-28)**: `_stageOf()`에서 `ideas.isEmpty` 체크 바로 다음, `voteOpen`/`votes` 판정보다 먼저 `approvedGroups.isEmpty` 체크를 추가 — 승인된 그룹이 하나도 없으면 `voteOpen`·`votes` 값과 무관하게 무조건 `collecting`(의견 수집 단계)으로 되돌린다. 기존 정상 흐름(그룹이 있는 상태에서의 투표 중/결과 확정)에는 영향 없음
+- **검증**: `flutter analyze` 0 · `flutter test` 23/23. 실기기(R59MA03BRCN) 재현 조건 그대로(승인 0개·투표기록 1건·voteOpen=false) 새 빌드 설치 후 재확인 — 빈 화면 대신 "선생님 질문 / 회의 / 1명 제출 · 1명"으로 정상 폴백
+- **상태**: ✅ 해결됨 · 실기기 검증 완료
+
+### [Common-Vote-Round-01] ← 사용자 직접 QA 중 발견, 코드 분석으로 확정 (2026-08-28)
+- **현상**: 학생이 한 번이라도 투표하면, 그 학생은 **세션이 끝날 때까지 투표/결과 화면에 갇힌다.** 교사가 새 질문을 던지고 싶어도 학생 화면이 말하기(발화) 화면으로 돌아갈 방법이 UI에 없다
+- **근거(코드)**: `student_session_screen.dart`의 `showVote` 판정식 —
+  ```dart
+  final showVote =
+      state.voteOpen && state.approvedGroups.isNotEmpty ||
+      (!state.voteOpen && _myVote != null && state.approvedGroups.isNotEmpty);
+  ```
+  `_myVote != null`(한 번이라도 투표함)이고 `approvedGroups`가 하나라도 남아있으면 `voteOpen` 값과 무관하게 영원히 `true`. 이 조건을 거짓으로 되돌리는 유일한 경로는 **교사가 승인된 그룹을 전부 취소하는 것**뿐인데, 그 액션은 `Common-Beam-01`(빔프로젝터 빈 화면)을 유발한다 — 학생을 풀어주려면 교사 화면이 깨지는 이율배반 구조
+- **결정적 근거**: `moamal_repository.dart`/`firebase_moamal_repository.dart`에 `clearVotes(sessionCode)` 메서드가 이미 구현되어 있으나 **앱 전체에서 이 메서드를 호출하는 UI가 단 하나도 없다**(`grep` 확인). "다음 질문으로 라운드를 새로 시작하는" 기능을 준비하다 버튼 연결 없이 남겨진 죽은 코드로 보인다. `"라운드"/"다음 질문"/"재투표"` 관련 UI 문구도 코드 전체에 존재하지 않는다
+- **결론**: 모아말은 현재 **"세션 1개 = 질문 1개"**로 설계되어 있다. 한 세션 안에서 두 번째 질문을 던지고 다시 의견을 모으는 흐름 자체가 지원되지 않는다. 여러 질문을 다루려면 세션을 새로 만드는 것 외에 방법이 없다
+- **영향**: 실제 수업에서 교사가 "투표 끝났으니 이번엔 다른 주제로 다시 얘기해보자"를 시도하면 학생들이 전부 투표 화면에 멈춰 있어 진행이 막힌다. 다만 이게 **버그**인지 **의도된 MVP 범위 제한**인지는 전략기획 판단이 필요 — 파일럿 전 결정 필요
+- **등급**: P1 (파일럿 수업이 다중 질문/라운드를 요구하면 진행 자체가 막힘) — 단, 단일 질문 세션만 상정한 설계라면 P3(기능 요청)로 재분류
+- **파일**: `lib/screens/student/student_session_screen.dart`(`showVote` 판정식), `lib/repositories/*.dart`(`clearVotes()` 미사용)
+- **결정 필요 사항**: ① 다중 라운드를 정말 지원할 것인가(그렇다면 "새 라운드 시작" 버튼 신설 — `clearVotes()` + `approvedGroups` 정리 + 학생 `_myVote` 리셋을 한 액션으로 묶어야 함, `Common-Beam-01`도 같이 고쳐야 함) ② 아니면 "세션당 질문 1개"를 공식 설계로 확정하고 리포트/온보딩에 명시할 것인가
+- **상태**: 🟡 설계 공백 확인 완료 · 전략기획 결정 대기 ← G1 마무리 중 발견 (2026-08-25)
 - **현상**: 학생이 `나가기`로 수업에서 나가도 **교사 화면의 `참여` 수가 줄지 않는다.** 학생 1명이 나간 뒤에도 계속 `참여 1`
 - **원인**: **퇴장 처리가 아예 구현되어 있지 않다.** `_ExitDialog`에서 `나가기`를 눌러도 `Navigator.pop()`만 실행되고 Firestore에는 아무 쓰기도 하지 않는다.
   `firebase_moamal_repository.dart`에 `removeParticipant`/`leaveSession` 류의 메서드가 없다(`.delete()` 호출부는 `deleteApprovedGroup` 하나뿐)
@@ -676,6 +727,75 @@
   이번엔 문구만 실제 동작에 맞췄다
 - **상태**: ✅ 해결 · **실기기 미검증**
 
+### [Gemini-2-Summary-01] ← G2 첫 실기기 발언 테스트 중 발견 (2026-08-27)
+- **현상**: 교사 홈 "요약" 탭의 **"AI 누적 요약" 카드가 항상 빈 흰 박스로만 보인다.** 참여·발언·AI 그룹 숫자는 정확히 올라가고(`1/1/1`), `정리`(organize_screen) 화면과 `브리핑` 탭에는 같은 데이터가 정상 표시되는데, 딱 이 카드만 테두리도 글자도 없이 통짜 배경색만 그려진다
+- **재현**: 학생이 발언 1건 제출(5초 되돌리기 유예 후 확정) → 교사 화면 "요약" 탭 → 카드 자리가 비어 있음. 시간을 아무리 기다려도, 다른 화면을 갔다 와도 그대로
+- **원인 — Flutter 프레임워크 제약**: `GroupCard`가 `BoxDecoration`에 **면마다 다른 색의 `Border`**(왼쪽만 `kYellow`, 나머지 3면 `kBorder`)와 **`borderRadius`를 동시에** 지정하고 있었다. Flutter는 "테두리 색이 균일하지 않으면 둥근 모서리를 그릴 수 없다"는 제약이 있어 `paint()` 단계에서 `A borderRadius can only be given on borders with uniform colors.` 예외를 던진다.
+  **이 예외는 build 단계가 아니라 paint 단계에서 나기 때문에, Flutter의 기본 빨간 에러 화면(`ErrorWidget`)이 뜨지 않고 그 카드만 조용히 아무것도 안 그려진다** — `flutter analyze`·`flutter test`로도 잡히지 않고, 앱을 눈으로 보기 전엔 알 방법이 없다
+- **진단 경로**: 정적 코드 분석(색상값 대조, 픽셀 샘플링으로 테두리·글자색 완전 부재 확인)으로는 원인을 좁히지 못해, 실행 중인 앱에 `flutter attach -d <device>`로 직접 붙어 Dart 콘솔의 실시간 예외 로그(`Another exception was thrown: A borderRadius can only be given on borders with uniform colors.`)를 확인해 확정했다
+- **파일**: `lib/widgets/group_card.dart`
+- **등급**: P1 — 크래시는 없지만, 이 카드가 **교사가 수업 중 가장 먼저·가장 자주 보는 AI 요약 화면**이라 사실상 핵심 기능 하나가 통째로 안 보이는 것과 같다
+- **수정** (2026-08-27): 좌측 강조띠를 `Border`에서 분리해 `ClipRRect(borderRadius) > Container(border: Border.all(kBorder, 균일색)) > Stack([좌측 4px kYellow Positioned, 본문 Padding])` 구조로 변경. 둥근 모서리는 이제 균일한 `kBorder` 하나에만 걸리고, 노란 강조띠는 별도 위젯으로 그 위에 얹는다
+- **검증**: 재빌드·재설치 후 실기기(에뮬레이터)에서 "급식 잔반 줄이기 · 1건 · 급식에서 먹을 만큼만 받으면 잔반이 줄어들 것 같아요." 카드가 테두리·강조띠·본문 모두 정상 표시되는 것을 스크린샷으로 확인
+- **비고**: 같은 문제가 다른 곳에도 잠복해 있을 수 있다는 우려대로, **`lib/screens/teacher/report_screen.dart`의 `_QuoteCard`(리포트 인용문 카드)에서 동일 패턴을 하나 더 찾았다** — `border: Border(left: BorderSide(color: kGreen, width: 3))` + `borderRadius: BorderRadius.circular(10)` 조합. 같은 방식(ClipRRect+Stack)으로 함께 수정. `grep -rn "border: Border("` 전수 조사로 이 2건 외 나머지는 전부 단일 면(top만)이고 `borderRadius`가 없어 안전함을 확인했다. **QuoteCard 쪽은 이번 세션 리포트에 인용문이 생성되지 않아(의견 1건뿐) 실기기 시각 확인은 못 했다** — 코드 패턴이 GroupCard와 동일하고 `flutter analyze`·`flutter test` 통과만 확인. 다음에 의견이 여러 건 쌓인 세션의 리포트를 열 때 실제로 카드가 보이는지 확인할 것
+- **상태**: ✅ 해결 · GroupCard 실기기 검증 완료, **QuoteCard는 시각 확인 대기**
+
+### [Gemini-2-Mic-01] ← G2 실기기 2-2(PTT) 검증 중 발견 (2026-08-27)
+- **현상**: 학생 마이크의 **길게 누르기(PTT)가 `말하기`(idle) 상태에서는 정상 동작하는데, 한 번 말한 뒤 `다시 말하기`(done) 상태에서는 길게 눌러도 아무 반응이 없다.** 같은 상태에서 짧게 탭하면(토글 모드) 정상적으로 녹음이 시작된다
+- **재현**: 학생 화면에서 1) 최초 상태(`말하기`)에서 길게 누르기 → 정상 녹음·전사. 2) 제출 후 `다시 말하기` 상태에서 길게 누르기 → **무반응**. 3) 같은 `다시 말하기` 상태에서 짧게 탭 → 정상 녹음 시작
+- **원인**: `_onLongPressStart()`가 `if (_micStatus != _MicStatus.idle) return;`로 **`idle` 상태만 허용**한다. 반면 `_onTap()`은 `_micStatus == _MicStatus.idle || _micStatus == _MicStatus.done` 둘 다 허용하고, `done`이면 `_lastTranscript`를 지우고 `idle`로 되돌린 뒤 녹음을 시작하는 별도 처리가 있다 — **이 done→idle 전환 로직이 tap 경로에만 있고 long-press 경로엔 없었다.**
+  `_handleForceStart()`(Mercury-3-Student-03에서 이미 고친 동일 유형의 idle/done 병행 처리)와 비교하면 이번 것만 놓친 것이 드러난다
+- **영향**: PTT는 **"누르는 동안만 말한다"는 명확한 사용성 때문에 저학년 학생에게 권장되는 방식**인데, 두 번째 발언부터 막히면 학생이 "고장났다"고 오인해 토글 모드로 전환하거나 교사에게 도움을 요청하게 된다 — 첫 발언만 되는 버그라 QA에서도 초기 상태만 확인하면 놓치기 쉽다
+- **파일**: `lib/screens/student/student_session_screen.dart` — `_onLongPressStart()`
+- **등급**: P2
+- **수정** (2026-08-27): `_onLongPressStart()`가 `idle`뿐 아니라 `done`도 허용하도록 조건을 넓히고, `_onTap()`과 동일하게 `done`일 때 `_micStatus`를 `idle`로, `_lastTranscript`를 `null`로 되돌린 뒤 녹음을 시작하도록 맞췄다
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, "다시 말하기" 상태에서 길게 누르기 정상 동작 확인)
+
+### [Gemini-2-VAD-01] ← G2 실기기 2-3(VAD 자동 종료) 검증 중 발견 (2026-08-27)
+- **현상**: 토글 모드로 녹음 중 3초간 침묵해도 **자동 종료(VAD)가 걸리지 않는다.** Mercury 때 같은 물리 기기(SM-A305N)를 교사 역할로 썼을 땐 정상 동작했었다
+- **원인**: 학생 화면의 침묵 임계값이 `-40dBFS`로, 교사 화면(`-34dBFS`)보다 **훨씬 엄격하다(더 조용해야 침묵으로 인식).** `db > threshold`일 때 "아직 말하는 중"으로 타이머를 리셋하는 로직이라, 임계값이 낮을수록(더 음수일수록) 일반적인 방 소음도 계속 "말하는 중"으로 오인해 3초 침묵이 절대 채워지지 않는다. 이 위험은 사실 체크리스트에 미리 적어뒀던 것이다(gemini_qa.html 2-3: "학생측 임계값은 -40dBFS로 교사측(-34)과 다르다. 실기기에서 안 걸리면 교사와 동일 튜닝 필요") — 예상이 그대로 들어맞았다
+- **파일**: `lib/screens/student/student_session_screen.dart` — `_silenceThresholdDb`
+- **등급**: P2 — 토글 모드에서 학생이 수동으로 다시 눌러 종료할 수 있어 진행은 막히지 않지만, "말 끝나면 자동으로 넘어간다"는 설계 의도가 무력화된다
+- **수정** (2026-08-27): `_silenceThresholdDb`를 `-40.0` → `-34.0`으로 변경, 교사 화면(Mercury에서 실기기 검증된 값)과 동일하게 맞췄다. 로직 자체는 두 화면이 완전히 동일해 임계값만 정렬하면 된다
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, 3초 침묵 후 자동 종료 정상 확인)
+
+### [Gemini-4-Vote-01] ← G4 실기기 4-6(빔 프로젝터 실시간 반영) 재검증 중 발견 (2026-08-27)
+- **현상**: 교사가 투표를 **닫았다가 다시 열어도**, 이미 한 번 투표한 학생은 화면엔 "투표가 열렸어요"가 뜨는데 **다른 그룹을 눌러도 반응이 없다.** 버튼엔 "투표 완료"라고만 뜬다
+- **재현**: 학생 투표 → 교사 [투표 닫고 결과 확정] → 교사 [다시 열기] → 학생이 다른 그룹 탭 → 아무 일도 안 일어남
+- **원인**: 학생 화면의 "내가 투표했는가"(`_myVote`)가 **서버 값과 전혀 동기화되지 않는 순수 로컬 변수**였다. `_castVote()` 성공 시 딱 한 번 세팅되고 이후 앱이 재시작되기 전까진 절대 안 바뀐다. 그 결과:
+  - **같은 앱 세션 안에서는 투표를 한 번 하면 그 뒤로 절대 못 바꾼다** — `voteOpen`이 계속 켜져 있어도 마찬가지. (오전에 4-4에서 "재투표가 잘 된다"고 확인했던 건, 그 사이 여러 번 있었던 앱 재설치로 `_myVote`가 우연히 초기화돼 있었기 때문이었다 — 진짜 같은 세션 내 재투표가 확인된 게 아니었다)
+  - **반대로 나갔다 재입장하면 `_myVote`가 초기화돼 다시 투표 가능해진다** — 이건 재투표를 막아야 할 때 오히려 열려있는 구멍이었다
+  - 확인 버튼(`onTap`)도 `_myVote == null`일 때만 눌리게 되어 있어, 옵션을 다시 고를 수 있게 고쳐도 확인 버튼 자체가 막혀 있었다(수정 시 같이 발견)
+- **파일**: `lib/screens/student/student_session_screen.dart`, `lib/repositories/moamal_repository.dart`, `lib/repositories/firebase_moamal_repository.dart`
+- **등급**: P2 — 데이터가 잘못 집계되진 않지만(`votes/{participantId}` 단일 문서라 항상 안전), "재투표를 허용할지"의 기준이 뒤집혀 있었다
+- **수정 방향 결정** (2026-08-27, 대표): "나갔다 재입장하면 투표가 초기화되어야 하는가"를 고민하다가, 기준을 **"투표함이 지금 열려있는가"** 하나로 통일하기로 결정. 열려있는 동안은 언제든 다시 고를 수 있고, 닫히면 그 순간부터 전원 잠긴다
+- **수정**: `_myVote`를 로컬 변수 대신 학생 자신의 `votes/{내 uid}` 문서를 실시간 구독(`listenToMyVote` 신설)해 항상 서버와 동기화. 옵션 탭 조건을 `voteOpen && _myVote == null` → `voteOpen`만으로 완화, 확인 버튼의 `onTap`·라벨·강조 조건도 `_pendingVoteId` 유무 기준으로 일괄 정리. `votes/{uid}` 문서는 이미 본인 read 권한이 있어(`firestore.rules:50-51`) **규칙 변경·백엔드 작업 불필요**
+- **검증**: `flutter analyze` 0건, `flutter test` 23/23 통과. 실기기: 재입장 시 서버에 저장된 이전 투표가 정확히 복원되는 것 확인 → 투표 닫았다 다시 연 상태에서 다른 그룹으로 재투표 → 이전 표(1→0)·새 표(0→1) 정상 전환, 참여·완료 인원수 그대로 유지(중복 집계 없음) 확인
+- **비고**: "학생이 잔꾀를 부려 투표를 조작할 수 있는가"는 이 수정으로 오히려 개선됐다 — `votes/{uid}`가 참여자당 문서 하나뿐이라 몇 번을 바꿔도 항상 최종 선택 하나만 집계되고, 나갔다 재입장하는 뒷구멍도 서버 동기화로 막혔다
+- **상태**: ✅ 해결 · 실기기 검증 완료
+
+### [Gemini-6-Session-01] ← G6 6-5(강제 종료 → 재실행) 검증 중 확인 (2026-09-03)
+- **현상**: 학생 앱을 강제 종료(`am force-stop`) 후 재실행하면 진행 중이던 세션 화면으로 돌아가지 못하고 **교사/학생 선택 랜딩 화면**으로 초기화된다. 6자리 코드와 이름을 처음부터 다시 입력해야 세션에 복귀할 수 있다
+- **재현**: 학생이 세션 참여 중 → `adb shell am force-stop com.moamal.prototype` → 앱 재실행 → 랜딩 화면(교사/학생 선택) 표시, 세션 정보 없음
+- **원인**: 교사 쪽은 `active_teacher_session`을 통해 마지막 세션으로 자동 복귀하는 로직이 `teacher_home_screen.dart`·`main.dart`에 있지만, **학생 쪽에는 대응하는 저장·복귀 로직이 전혀 없다.** 전체 `lib/` 검색에서 `active_teacher_session`/`active_student_session` 패턴이 교사 파일 2곳에만 존재
+- **참고**: `Gemini-1-Exit-04`(2026-08-25)에서 이미 "학생측 세션 복귀 수단이 없다"는 점을 나가기 다이얼로그 문구 결정의 근거로 언급한 바 있음 — 이번 G6 테스트로 실제 강제종료 시나리오에서 그 부재를 직접 재현·확인
+- **영향**: 실제 교실에서 학생 기기가 메모리 부족으로 백그라운드 앱이 강제 종료되거나, 학생이 실수로 최근 앱 목록에서 스와이프하거나, 기기를 재시작하는 경우 — 세션 코드를 다시 받아 처음부터 재입장해야 한다. Firebase 익명 인증 자체는 로컬에 유지되므로(같은 uid로 재입장 가능, `pm clear`가 아닌 한) 데이터 유실보다는 **번거로움과 수업 흐름 끊김**에 가깝다
+- **등급**: P2~P3 후보 — 교사가 코드를 다시 보여주면 복구 가능하고 데이터 손상은 없으나, 저학년 학생 다수가 참여하는 실사용 환경에서는 빈도가 낮지 않을 수 있어 등급 확정은 전략기획 판단 필요
+- **수정 방향(제안)**: 교사의 `active_teacher_session`과 동일한 패턴 — 로컬 저장소(SharedPreferences 등)에 `sessionCode`+참여 uid를 저장해두고, 앱 시작 시 해당 세션이 아직 `endedAt == null`이면 자동으로 재진입 화면을 건너뛰고 세션 화면으로 복귀
+- **파일**: `lib/screens/student/student_session_screen.dart`, `lib/screens/student/*`(참여 진입 관련 화면), 참고용 `lib/screens/teacher/teacher_home_screen.dart`
+- **상태**: 🟡 미해결 · 설계 결정 대기
+
+### [Gemini-R-Supervisor-01] ← GR R-1·R-7 검증 중 발견 (2026-09-03)
+- **현상**: 슈퍼바이저 PIN(`1218`) → **"기존 세션 재개"**로 다른 기기(다른 교사 계정)가 만든 세션 코드에 진입하면, 화면은 정상적인 교사 UI로 뜨지만 **교사 전용 쓰기 동작이 전부 조용히 실패한다.** 실기기 재현: 물리기기가 슈퍼바이저로 에뮬레이터가 만든 세션(NONCNN)에 "기존 세션 재개"로 진입 → 토글 모드로 발문 녹음 → 전사 텍스트는 화면에 뜨지만 곧이어 `[cloud_firestore/permission-denied] The caller does not have permission to execute the specified operation.` 원시 예외 문구가 스낵바로 노출됨. PTT(꾹 눌러 말하기)는 초안 시트만 띄우고 즉시 저장을 안 해서 같은 문제를 겉으로는 감춘다(시트에서 저장을 눌렀다면 동일하게 실패했을 것)
+- **원인**: `landing_screen.dart` `_showSupervisorPad()`가 PIN 통과 후 `auth.signInAnonymously()`로 **새 익명 UID**를 발급하고, "기존 세션 재개" 선택 시 그 코드로 `TeacherHomeScreen(existingCode: code)`에 그냥 진입시킨다 — **세션 소유권(`ownerUid`) 재할당·검증 로직이 전혀 없다.**
+  `firestore.rules`의 `isOwner(sessionCode)`는 `sessions/{code}.ownerUid == request.auth.uid`만 확인하는데, 슈퍼바이저의 새 익명 UID는 원래 세션을 만든 교사(Google/Kakao/Naver 로그인 또는 다른 익명 세션)의 UID와 절대 같을 수 없다. 그 결과 `teacher_notes`·`approvedGroups`·`mergeLogs`·세션 문서 수정·참가자 강제제어 등 `isOwner` 게이트가 걸린 모든 쓰기가 막힌다. 읽기는 대부분 `signedIn()`만 요구해 정상 작동하므로, **화면은 완전히 정상으로 보이다가 액션을 취하는 순간에만 실패가 드러난다**
+- **영향**: "기존 세션 재개"가 실질적으로 **"내가(같은 UID로) 이전에 슈퍼바이저로 만든 세션을 재개"할 때만** 동작한다. 다른 교사·다른 기기의 진행 중인 수업을 슈퍼바이저 권한으로 이어받거나 참관하는 용도로는 쓸 수 없다 — 코드만 알면 들어가지지만 아무것도 할 수 없다. 에러 메시지도 Firebase 원시 예외 문자열이라 사용자가 원인을 알 수 없다
+- **참고**: README.md에 슈퍼바이저 모드 자체가 "출시 전 제거 또는 숨김 처리" 대상으로 이미 표시되어 있어(디버그/QA 우회용) 심각도는 제한적이나, QA 중 실기기로 실제 재현되었고 에러 메시지 품질도 나쁘므로 기록
+- **파일**: `lib/screens/common/landing_screen.dart` (`_showSupervisorPad`, `_showSessionModeDialog`), `firestore.rules` (`isOwner`)
+- **등급**: P2 — 슈퍼바이저 모드가 출시 전 제거/숨김 예정 기능이라 파일럿에 직접 영향 없음. 다만 QA·디버깅 중 "권한 문제인지 로직 버그인지" 혼동을 유발할 수 있어 기록
+- **수정 방향(제안)**: ① "기존 세션 재개"를 정말 지원하려면 세션 문서에 `ownerUid` 대신/추가로 감독 가능한 UID 목록을 두거나, 슈퍼바이저 전용 별도 규칙 분기 필요 ② 아니면 문서화만 하고 슈퍼바이저 모드 자체를 출시 전 제거(기존 계획대로)하며 이 이슈도 함께 소멸
+- **상태**: 🟡 확인됨 · 슈퍼바이저 모드 제거 시 자동 해소 예정
+
 ---
 
 ## Apollo
@@ -691,7 +811,13 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
 - **최초 발견**: Mercury v1
 - **확인 필요**: `WidgetsBindingObserver` 재구독 로직 또는 Firebase 자체 재연결 동작
 - **등급**: P1 (세션 재진입 시 상태 복구 실패 가능)
-- **상태**: 🟡 미재현 (Mercury QA v2에서 재확인 필요)
+- **2026-09-03 Gemini G6 실기기 검증** (공기계 R59MA03BRCN=학생, 에뮬레이터=교사, 세션 NONCNN):
+  - **6-1** 학생 30초 백그라운드 → 복귀: 정상, 크래시·프리징 없음
+  - **6-2** 학생 백그라운드 중 교사가 투표 시작 → 학생 복귀 시 즉시 반영
+  - **6-3** 학생 비행기 모드 ON → OFF (`adb shell cmd connectivity airplane-mode`): OFF 중 Firestore WatchStream이 `ENETUNREACH`로 끊기는 것 확인, 재연결 후 교사의 "투표 닫기"가 학생 화면에 실시간 반영되는 것까지 확인해 재연결이 실제로 동작함을 검증
+  - **6-6** 교사 15초 백그라운드 → 복귀: LIVE 타이머·통계 정상 유지
+  - `WidgetsBindingObserver` 재구독이든 Firebase SDK 자체 재연결이든, **결과적으로 재연결은 정상 동작**한다
+- **상태**: ✅ **재현 안 됨 · 정상 동작 확인** (2026-09-03, adb 기반 lifecycle/network 시나리오 4종)
 
 ### [Common-Rules-01] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
 - **현상**: `ideas` 하위 컬렉션의 `create`, `update`가 `signedIn()`만 요구 → **다른 학생은 물론 그 세션에 참여하지도 않은 익명 사용자가 남의 의견 텍스트를 덮어쓸 수 있음**. 임의 세션 코드에 의견을 주입하는 것도 가능
@@ -701,7 +827,7 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
   - `firebase_moamal_repository.dart` `submitIdea()` — 문서에 `authorUid`(현재 로그인 UID) 기록. 의견 쓰기 경로가 이 메서드 하나뿐이라 레포지터리에서 채움
   - `firestore.rules` `ideas` — `create`는 `request.resource.data.authorUid == request.auth.uid`, `update`는 교사 또는 작성자 본인만 + `authorUid` 변경 금지
   - `authorUid`가 없는 구 문서(기존 8건)는 교사만 수정 가능
-- **상태**: ⚠️ **코드 수정 완료(커밋 `004b3fa`) · 배포 전** — 규칙을 먼저 배포하면 구 빌드의 의견 제출이 전부 막힘(P0 회귀). **두 기기 모두 새 빌드 설치 → 규칙 배포** 순서 필수
+- **상태**: ✅ **해결됨** — 2026-08-27 배포 완료. 2026-08-28 두 단계로 실기기·규칙 양쪽 검증: ① 학생 실기기(R59MA03BRCN)에서 의견 1건 실제 제출 → 교사 정리 화면 정상 도착·AI 자동분류까지 확인(로그캣 `PERMISSION_DENIED` 없음), ② Firestore 에뮬레이터 테스트(S-7)로 타인 `idea` 수정 시도·`authorUid` 변조 시도 둘 다 거부 확인. Apollo 진입 차단 조건 충족
 - **배포 시점 확정 (2026-08-26)**: 앱개발 방 미구현 3건이 끝난 빌드를 두 기기에 설치한 직후, **Gemini S 섹션 직전**에 배포한다. G0~G4는 현재 빌드로 진행해도 무방하다(이 규칙은 해당 경로에 영향이 없다). 배포 이후로는 구 빌드로 QA를 이어가면 안 된다 — 되돌아갈 수 없는 지점이다. 상세는 현황판 §15
 
 ### [Common-Rules-02] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
@@ -710,14 +836,14 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
 - **영향**: 교사가 "결과 확정"을 선언한 뒤에도 득표가 변할 수 있음. 빔프로젝터 화면은 실시간 구독이라 학생들 눈앞에서 숫자가 바뀜
 - **등급**: P1 (Gemini QA S-8 점검 항목)
 - **수정 방향**: `votes` 규칙에 세션 문서 조회를 추가해 `voteOpen == true`일 때만 쓰기 허용. 투표 1건당 규칙 내부 읽기 1회가 추가됨(학급 25명 기준 25 read)
-- **상태**: 🔴 미해결 — **보류 판단 유지 (2026-08-26 재확인)**. 투표는 Gemini 단일 마일스톤(G4-3)이 지나는 경로라, QA 도중 새 거부 조건을 얹으면 실패 원인이 규칙인지 앱인지 분간이 어려워진다. Gemini 종료 후 `endedAt` 차단과 **한 번의 `get()`으로 묶어** 적용한다(세션 문서 1회 조회로 `voteOpen`·`endedAt`을 함께 판정). S-8에서는 "닫힌 뒤에도 본인 표가 써진다"를 **재현 여부만 기록**하고 실패로 세지 않는다
+- **상태**: 🔴 미해결 — **보류 판단 유지 (2026-08-26 재확인)**. 투표는 Gemini 단일 마일스톤(G4-3)이 지나는 경로라, QA 도중 새 거부 조건을 얹으면 실패 원인이 규칙인지 앱인지 분간이 어려워진다. Gemini 종료 후 `endedAt` 차단과 **한 번의 `get()`으로 묶어** 적용한다(세션 문서 1회 조회로 `voteOpen`·`endedAt`을 함께 판정). S-8에서는 "닫힌 뒤에도 본인 표가 써진다"를 **재현 여부만 기록**하고 실패로 세지 않는다. **2026-08-28**: Firestore 에뮬레이터 + `@firebase/rules-unit-testing`으로 실제 `firestore.rules`를 로드해 S-1~S-10 전체 재현 테스트 진행 중 이 결함도 그대로 재현됨(`voteOpen=false` 이후 본인 vote 쓰기 성공) — 예상대로이며 Gemini QA는 정상 종료, 수정은 여전히 Gemini 이후로 보류
 
 ### [Common-Rules-03] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
 - **현상**: `match /sessions/{sessionCode} { allow read: if signedIn(); }`은 get과 **list를 모두 허용**. 익명 사용자가 `sessions` 컬렉션을 통째로 조회해 **모든 교사의 세션 코드·제목·ownerUid를 열람**할 수 있음
 - **영향**: Common-Rules-01과 합쳐지면 임의 수업에 의견 주입이 가능했음. Rules-01 수정 후에도 세션 코드 유출 경로는 남음
 - **등급**: P1 (파일럿 전 필수, QA 차단 아님)
 - **수정 (2026-08-26)**: `firestore.rules` `sessions` — `allow read` → `allow get: if signedIn(); allow list: if false;`. 앱 전체에서 `sessions` 컬렉션 쿼리는 없고 `collection('sessions').doc(code)` 단건 접근뿐임을 확인(`collectionGroup` 사용도 없음)
-- **상태**: ⚠️ **코드 수정 완료 · 배포 전** — 클라이언트 동작 영향이 없어 Common-Rules-01과 **같은 배포에 묶는다**(규칙 파일은 통째로 배포되므로 분리 배포는 의미가 없다). 검증은 신설 항목 S-10
+- **상태**: ✅ **해결됨** — 2026-08-27 Common-Rules-01과 함께 배포 완료. 2026-08-28 Firestore 에뮬레이터 테스트(S-10)로 `sessions` list 조회 거부·단건 `get` 정상 동작 둘 다 확인
 
 ### [Common-Rules-04] ← 백엔드 규칙 점검 중 발견 (2026-08-26)
 - **현상**: 학생은 `votes` 컬렉션 목록 조회 권한이 없는데(본인 문서만), 학생 화면은 `state.votes`로 득표를 계산 → **투표 종료 후 학생 화면 결과 막대가 항상 0**
@@ -736,7 +862,7 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
   아무 안내도 남지 않았다. `state.votes` 기반 집계 코드(`counts`/`maxVotes`)도 함께 제거 —
   학생 권한으로는 항상 빈 값이라 죽은 계산이었다. `[Flutter 앱개발]` 협조 항목(학생 경로 득표 집계 로직 제거)은
   이번 변경으로 UI 쪽 소비처가 없어졌으므로 남은 작업이 없어 보이나, 레포지터리·모델 레벨 정리 여부는 그쪽 판단
-- **상태**: ✅ 코드 수정 완료 · **실기기 미검증**. 확인 후 학생 화면에 0표 막대가 남아 있지 않은지 확인
+- **상태**: ✅ 해결 · **실기기 검증 완료** (2026-08-27, Gemini G4 4-5 — 0표 막대 없이 "투표 완료 · 결과는 앞 화면에서 확인해요" 정상 표시)
 
 ### [Common-Auth-01] ← 백엔드 인증 점검 중 발견 (2026-08-26)
 - **현상**: `AuthService.signInAnonymously()`가 `currentUser`가 있으면 **그 계정을 그대로 반환**. Mercury에서 교사 기기로 쓴 공기계를 학생 기기로 재사용하면 학생이 **교사 UID로 입장**
