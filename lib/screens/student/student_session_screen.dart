@@ -38,9 +38,19 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   Stream<SessionState>? _sessionStream;
 
   // Vote state
+  // _myVote는 내 votes/{uid} 문서를 실시간 구독해 서버와 동기화한다.
+  // 로컬에서만 세팅하면(예전 방식) 앱을 재시작해야만 초기화되고, 반대로
+  // 교사가 투표를 닫았다 다시 열어도 절대 안 풀렸다(Gemini-4-Vote-01).
+  StreamSubscription<String?>? _myVoteSub;
   String? _pendingVoteId;
   String? _myVote;
   bool _isVoting = false;
+
+  // 교사 발문 질문 카드 — teacher_notes 최신 1건 실시간 구독
+  // (Gemini-7-TeacherNote-01: 예전엔 ideas에서 speaker=='교사'를 찾는
+  // 죽은 코드라 화면에 절대 표시되지 않았다).
+  StreamSubscription<String?>? _teacherNoteSub;
+  String? _teacherNote;
 
   // Mic state
   _MicStatus _micStatus = _MicStatus.idle;
@@ -63,15 +73,21 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   // VAD
   StreamSubscription<double>? _amplitudeSub;
   DateTime? _lastSpeechTime;
-  static const double _silenceThresholdDb = -40.0;
+  // 교사측과 동일 값 (2026-08-27, Gemini-2-VAD-01). 원래 -40이었으나 실기기
+  // 검증 결과 방 소음 환경에서 절대 안 걸렸다 — 교사측은 -34로 이미 실기기
+  // 검증됐으므로(Mercury) 같은 값으로 맞춘다.
+  static const double _silenceThresholdDb = -34.0;
   static const int _silenceSec = 3;
 
   // Force control
   StreamSubscription<bool>? _forceStartSub;
+  StreamSubscription<bool>? _forceSpeakSub;
   StreamSubscription<bool>? _forceStopSub;
   bool _forceStartBannerVisible = false;
   bool _forceStopBannerVisible = false;
   Timer? _forceStartBannerTimer;
+  // forceStart(잠금 해제만)와 forceSpeak(잠금 해제+즉시 녹음)가 문구를 다르게 쓴다.
+  String _forceStartBannerText = '선생님이 발언을 시작했어요';
 
   // Ripple animation
   late final AnimationController _rippleCtrl;
@@ -99,7 +115,25 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     ).animate(CurvedAnimation(parent: _rippleCtrl, curve: Curves.easeOut));
 
     _listenForceStart();
+    _listenForceSpeak();
     _listenForceStop();
+    _listenMyVote();
+    _listenTeacherNote();
+  }
+
+  void _listenMyVote() {
+    final uid = _auth.currentUid;
+    if (uid == null) return;
+    _myVoteSub = _repo.listenToMyVote(widget.sessionCode, uid).listen((gid) {
+      if (mounted) setState(() => _myVote = gid);
+    });
+  }
+
+  void _listenTeacherNote() {
+    _teacherNoteSub =
+        _repo.listenToLatestTeacherNote(widget.sessionCode).listen((text) {
+      if (mounted) setState(() => _teacherNote = text);
+    });
   }
 
   void _listenForceStart() {
@@ -112,23 +146,32 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     });
   }
 
+  void _listenForceSpeak() {
+    final uid = _auth.currentUid;
+    if (uid == null) return;
+    _forceSpeakSub = _repo.listenToForceSpeak(widget.sessionCode, uid).listen((
+      on,
+    ) {
+      if (on && mounted) _handleForceSpeak(uid);
+    });
+  }
+
+  /// 잠금 해제만 한다 — 녹음은 학생이 직접 눌러야 시작된다 (2026-08-27 대표 결정).
+  /// 5학년 이상 토론 수업처럼 학생이 스스로 타이밍을 판단해야 하는 경우를 위한 경로.
   Future<void> _handleForceStart(String uid) async {
     await _repo.clearForceStart(widget.sessionCode, uid);
-    if (_sessionEnded) return;
-    // 잠금 해제는 마이크 상태와 무관하게 항상 수행한다.
-    // 상태 확인을 앞에 두면 학생이 발언을 마친 done 상태에서 early-return 되어
-    // 교사가 [시작]을 눌러도 잠금이 풀리지 않는다 (Mercury-3-Student-03).
-    if (!mounted) return;
-    setState(() {
-      _forceStopped = false;
-      _forceStopBannerVisible = false;
-      _forceStartBannerVisible = true;
-    });
-    _forceStartBannerTimer?.cancel();
-    _forceStartBannerTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _forceStartBannerVisible = false);
-    });
-    HapticFeedback.mediumImpact();
+    if (_sessionEnded || !mounted) return;
+    _forceStartBannerText = '선생님이 마이크를 켰어요. 눌러서 말해보세요';
+    _unlockMic();
+  }
+
+  /// 잠금 해제 + 즉시 녹음 시작. 교사가 "지금 말하세요"로 지목하는 순간을 위한 경로 —
+  /// 저학년 학급회의처럼 버튼 한 번 더 누르는 것도 장벽이 되는 경우를 위해 남겨둔다.
+  Future<void> _handleForceSpeak(String uid) async {
+    await _repo.clearForceSpeak(widget.sessionCode, uid);
+    if (_sessionEnded || !mounted) return;
+    _forceStartBannerText = '선생님이 발언을 시작했어요';
+    _unlockMic();
 
     // 자동 녹음 시작은 _onTap과 동일 규칙 — idle 또는 done에서만.
     if (_micStatus != _MicStatus.idle && _micStatus != _MicStatus.done) return;
@@ -141,6 +184,22 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     _isToggleMode = true;
     await _startRecording();
     if (_micStatus == _MicStatus.recording) _startVAD();
+  }
+
+  // 잠금 해제는 마이크 상태와 무관하게 항상 수행한다.
+  // 상태 확인을 앞에 두면 학생이 발언을 마친 done 상태에서 early-return 되어
+  // 교사가 풀어줘도 잠금이 풀리지 않는다 (Mercury-3-Student-03).
+  void _unlockMic() {
+    setState(() {
+      _forceStopped = false;
+      _forceStopBannerVisible = false;
+      _forceStartBannerVisible = true;
+    });
+    _forceStartBannerTimer?.cancel();
+    _forceStartBannerTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _forceStartBannerVisible = false);
+    });
+    HapticFeedback.mediumImpact();
   }
 
   void _listenForceStop() {
@@ -224,7 +283,10 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     _rippleCtrl.dispose();
     _stopVAD();
     _forceStartSub?.cancel();
+    _forceSpeakSub?.cancel();
     _forceStopSub?.cancel();
+    _myVoteSub?.cancel();
+    _teacherNoteSub?.cancel();
     _repo.stopListening();
     _sttClient.dispose();
     super.dispose();
@@ -376,7 +438,13 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
 
   Future<void> _onLongPressStart() async {
     if (_forceStopped || _sessionEnded) return;
-    if (_micStatus != _MicStatus.idle) return;
+    if (_micStatus != _MicStatus.idle && _micStatus != _MicStatus.done) return;
+    if (_micStatus == _MicStatus.done) {
+      setState(() {
+        _micStatus = _MicStatus.idle;
+        _lastTranscript = null;
+      });
+    }
     _isToggleMode = false;
     await _startRecording();
   }
@@ -405,7 +473,9 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
 
   Future<void> _castVote() async {
     final gid = _pendingVoteId;
-    if (gid == null || _isVoting || _myVote != null || _sessionEnded) return;
+    // _myVote는 이제 서버 구독값이라, 이미 투표했어도 voteOpen인 한
+    // 다시 캐스팅(변경)할 수 있어야 한다 — 여기서 막지 않는다(Gemini-4-Vote-01).
+    if (gid == null || _isVoting || _sessionEnded) return;
     setState(() => _isVoting = true);
     try {
       final uid = _auth.currentUid!;
@@ -444,15 +514,6 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
               .addPostFrameCallback((_) => _handleSessionEnded());
         }
 
-        // Latest teacher note → question card
-        Idea? teacherNote;
-        for (final idea in state.ideas.reversed) {
-          if (idea.speaker == '교사') {
-            teacherNote = idea;
-            break;
-          }
-        }
-
         final showVote =
             state.voteOpen && state.approvedGroups.isNotEmpty ||
             (!state.voteOpen &&
@@ -476,8 +537,8 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                 }
               },
               child: context.isCompact
-                  ? _compactLayout(state, teacherNote, showVote)
-                  : _mediumLayout(state, teacherNote, showVote),
+                  ? _compactLayout(state, _teacherNote, showVote)
+                  : _mediumLayout(state, _teacherNote, showVote),
             ),
           ),
         );
@@ -485,7 +546,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     );
   }
 
-  Widget _compactLayout(SessionState state, Idea? teacherNote, bool showVote) {
+  Widget _compactLayout(SessionState state, String? teacherNote, bool showVote) {
     if (showVote) {
       return Column(
         children: [
@@ -497,7 +558,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     return Column(
       children: [
         _header(state),
-        if (teacherNote != null) _questionCard(teacherNote.text),
+        if (teacherNote != null) _questionCard(teacherNote),
         if (_forceStartBannerVisible) _forceStartBanner(),
         if (_forceStopBannerVisible) _forcedStopBanner(),
         Expanded(child: _speakContent()),
@@ -506,7 +567,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     );
   }
 
-  Widget _mediumLayout(SessionState state, Idea? teacherNote, bool showVote) {
+  Widget _mediumLayout(SessionState state, String? teacherNote, bool showVote) {
     if (showVote) {
       return Column(
         children: [
@@ -526,7 +587,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                 width: w * 0.5,
                 child: Column(
                   children: [
-                    if (teacherNote != null) _questionCard(teacherNote.text),
+                    if (teacherNote != null) _questionCard(teacherNote),
                     if (_forceStartBannerVisible) _forceStartBanner(),
                     if (_forceStopBannerVisible) _forcedStopBanner(),
                     Expanded(child: _speakContent()),
@@ -668,10 +729,10 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
             child: const Center(child: Icon(Icons.mic, size: 14, color: kInk)),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              '선생님이 발언을 시작했어요',
-              style: TextStyle(
+              _forceStartBannerText,
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -1169,11 +1230,11 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (ctx, i) {
                     final group = groups[i];
+                    // 바꾸려고 새로 고른 게 있으면 그것만 강조한다 —
+                    // 아니면 이전 표와 새로 누른 표가 동시에 초록으로 보인다.
                     final isSelected =
-                        _pendingVoteId == group.groupId ||
-                        _myVote == group.groupId;
-                    final canTap =
-                        state.voteOpen && _myVote == null && !_isVoting;
+                        (_pendingVoteId ?? _myVote) == group.groupId;
+                    final canTap = state.voteOpen && !_isVoting;
 
                     return GestureDetector(
                       onTap: canTap
@@ -1288,7 +1349,9 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_myVote == null && _pendingVoteId != null) ...[
+                // 바꾸려는 새 선택이 있으면 그것부터 보여준다 — 이미 투표한
+                // 상태라도 voteOpen인 한 다시 고를 수 있다(Gemini-4-Vote-01).
+                if (_pendingVoteId != null) ...[
                   Text(
                     '내가 고른 의견: ${groups.firstWhere((g) => g.groupId == _pendingVoteId, orElse: () => groups.first).title}',
                     style: const TextStyle(fontSize: 12.5, color: kInk),
@@ -1297,8 +1360,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                ],
-                if (_myVote != null) ...[
+                ] else if (_myVote != null) ...[
                   const Text(
                     '투표가 완료됐어요',
                     style: TextStyle(
@@ -1312,13 +1374,11 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                 SizedBox(
                   width: double.infinity,
                   child: GestureDetector(
-                    onTap: _pendingVoteId != null && _myVote == null
-                        ? _castVote
-                        : null,
+                    onTap: _pendingVoteId != null ? _castVote : null,
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       decoration: BoxDecoration(
-                        color: _pendingVoteId != null && _myVote == null
+                        color: _pendingVoteId != null
                             ? kGreen
                             : kInk.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(18),
@@ -1335,12 +1395,14 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
                               ),
                             )
                           : Text(
-                              _myVote != null ? '투표 완료' : '투표하기',
+                              _pendingVoteId != null
+                                  ? '투표하기'
+                                  : (_myVote != null ? '투표 완료' : '투표하기'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 17.5,
                                 fontWeight: FontWeight.w700,
-                                color: _pendingVoteId != null && _myVote == null
+                                color: _pendingVoteId != null
                                     ? Colors.white
                                     : kInk.withValues(alpha: 0.4),
                               ),

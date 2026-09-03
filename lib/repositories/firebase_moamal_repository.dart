@@ -94,6 +94,15 @@ class FirebaseMoamalRepository implements MoamalRepository {
   }
 
   @override
+  Stream<String?> listenToMyVote(String sessionCode, String participantId) {
+    return _sessionRef(sessionCode)
+        .collection('votes')
+        .doc(participantId)
+        .snapshots()
+        .map((snap) => snap.data()?['groupId'] as String?);
+  }
+
+  @override
   Future<void> clearVotes(String sessionCode) async {
     final snapshot =
         await _sessionRef(sessionCode).collection('votes').get();
@@ -275,6 +284,17 @@ class FirebaseMoamalRepository implements MoamalRepository {
         .toList();
   }
 
+  @override
+  Stream<String?> listenToLatestTeacherNote(String sessionCode) {
+    return _sessionRef(sessionCode)
+        .collection('teacher_notes')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.isEmpty ? null : snap.docs.first.data()['text'] as String?);
+  }
+
   // ── Merge log ─────────────────────────────────────────────────────────────
 
   @override
@@ -357,6 +377,31 @@ class FirebaseMoamalRepository implements MoamalRepository {
         .doc(uid)
         .snapshots()
         .map((snap) => snap.data()?['forceStart'] as bool? ?? false);
+  }
+
+  @override
+  Future<void> forceSpeakMic(String sessionCode, String uid) async {
+    await _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .set({'forceSpeak': true}, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> clearForceSpeak(String sessionCode, String uid) async {
+    await _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .set({'forceSpeak': false}, SetOptions(merge: true));
+  }
+
+  @override
+  Stream<bool> listenToForceSpeak(String sessionCode, String uid) {
+    return _sessionRef(sessionCode)
+        .collection('participants')
+        .doc(uid)
+        .snapshots()
+        .map((snap) => snap.data()?['forceSpeak'] as bool? ?? false);
   }
 
   @override

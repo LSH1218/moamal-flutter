@@ -595,31 +595,50 @@ class _QuoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // 면마다 다른 색 Border(left만 kGreen) + borderRadius를 같이 주면
+    // paint 단계에서 "A borderRadius can only be given on borders with
+    // uniform colors." 예외가 나 카드 전체가 안 보이게 된다
+    // (GroupCard와 동일 원인, Gemini-2-Summary-01 참조).
+    // 좌측 강조띠를 Stack으로 분리해 우회한다.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: kGreen, width: 3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            quote.speaker,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: kGreen,
-            ),
+        child: Container(
+          color: Colors.white,
+          child: Stack(
+            children: [
+              const Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: SizedBox(width: 3, child: ColoredBox(color: kGreen)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(17, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      quote.speaker,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: kGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '"${quote.text}"',
+                      style: const TextStyle(
+                          fontSize: 13, color: kInk, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            '"${quote.text}"',
-            style: const TextStyle(fontSize: 13, color: kInk, height: 1.4),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -61,23 +61,52 @@ class _MicControlScreenState extends State<MicControlScreen> {
     });
   }
 
-  Future<void> _toggleOne(String uid) async {
+  Future<void> _turnOff(String uid) async {
     if (_pendingSet.contains(uid) || _allPending) return;
-    final wasMuted = _forcedMap[uid] ?? false;
     setState(() {
       _pendingSet.add(uid);
-      _forcedMap[uid] = !wasMuted; // optimistic
+      _forcedMap[uid] = true; // optimistic
     });
     try {
-      if (wasMuted) {
-        await widget.repo.clearForceStop(widget.sessionCode, uid);
-        await widget.repo.forceStartMic(widget.sessionCode, uid);
-      } else {
-        await widget.repo.forceStopMic(widget.sessionCode, uid);
-        await widget.repo.clearForceStart(widget.sessionCode, uid);
-      }
+      await widget.repo.forceStopMic(widget.sessionCode, uid);
+      await widget.repo.clearForceStart(widget.sessionCode, uid);
+      await widget.repo.clearForceSpeak(widget.sessionCode, uid);
     } catch (e) {
-      if (mounted) setState(() => _forcedMap[uid] = wasMuted); // revert
+      if (mounted) setState(() => _forcedMap[uid] = false); // revert
+    } finally {
+      if (mounted) setState(() => _pendingSet.remove(uid));
+    }
+  }
+
+  /// 잠금만 푼다 — 학생이 직접 눌러야 녹음이 시작된다.
+  Future<void> _unlockOnly(String uid) async {
+    if (_pendingSet.contains(uid) || _allPending) return;
+    setState(() {
+      _pendingSet.add(uid);
+      _forcedMap[uid] = false; // optimistic
+    });
+    try {
+      await widget.repo.clearForceStop(widget.sessionCode, uid);
+      await widget.repo.forceStartMic(widget.sessionCode, uid);
+    } catch (e) {
+      if (mounted) setState(() => _forcedMap[uid] = true); // revert
+    } finally {
+      if (mounted) setState(() => _pendingSet.remove(uid));
+    }
+  }
+
+  /// 잠금 해제 + 학생 화면에서 즉시 녹음 시작. "지금 말하세요" 지목용.
+  Future<void> _unlockAndSpeak(String uid) async {
+    if (_pendingSet.contains(uid) || _allPending) return;
+    setState(() {
+      _pendingSet.add(uid);
+      _forcedMap[uid] = false; // optimistic
+    });
+    try {
+      await widget.repo.clearForceStop(widget.sessionCode, uid);
+      await widget.repo.forceSpeakMic(widget.sessionCode, uid);
+    } catch (e) {
+      if (mounted) setState(() => _forcedMap[uid] = true); // revert
     } finally {
       if (mounted) setState(() => _pendingSet.remove(uid));
     }
@@ -321,7 +350,9 @@ class _MicControlScreenState extends State<MicControlScreen> {
           participant: p,
           isMuted: isMuted,
           isPending: isPending,
-          onToggle: () => _toggleOne(p.uid),
+          onTurnOff: () => _turnOff(p.uid),
+          onUnlock: () => _unlockOnly(p.uid),
+          onSpeak: () => _unlockAndSpeak(p.uid),
         );
       },
     );
@@ -374,13 +405,17 @@ class _StudentRow extends StatelessWidget {
   final Participant participant;
   final bool isMuted;
   final bool isPending;
-  final VoidCallback onToggle;
+  final VoidCallback onTurnOff;
+  final VoidCallback onUnlock;
+  final VoidCallback onSpeak;
 
   const _StudentRow({
     required this.participant,
     required this.isMuted,
     required this.isPending,
-    required this.onToggle,
+    required this.onTurnOff,
+    required this.onUnlock,
+    required this.onSpeak,
   });
 
   @override
@@ -441,38 +476,81 @@ class _StudentRow extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          // Toggle button
-          GestureDetector(
-            onTap: isPending ? null : onToggle,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isPending
-                    ? kGround
-                    : (isMuted ? kYellow : kGround),
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: kBorderMid),
-              ),
-              child: isPending
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 1.5, color: kGreen),
-                    )
-                  : Text(
-                      isMuted ? '켜기' : '끄기',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isMuted ? kInk : kInk.withValues(alpha: 0.6),
-                      ),
-                    ),
+          const SizedBox(width: 8),
+          // 꺼짐 상태: [켜기](잠금만 해제)·[말하기](해제+즉시 녹음) 둘 다 제시.
+          // 대기 상태: [끄기] 하나뿐.
+          if (isMuted) ...[
+            _ActionPill(
+              label: '켜기',
+              isPending: isPending,
+              color: kYellow,
+              textColor: kInk,
+              onTap: onUnlock,
             ),
-          ),
+            const SizedBox(width: 6),
+            _ActionPill(
+              label: '말하기',
+              isPending: isPending,
+              color: kGreen,
+              textColor: Colors.white,
+              onTap: onSpeak,
+            ),
+          ] else
+            _ActionPill(
+              label: '끄기',
+              isPending: isPending,
+              color: kGround,
+              textColor: kInk.withValues(alpha: 0.6),
+              onTap: onTurnOff,
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// 마이크 제어 목록의 작은 액션 버튼(켜기·말하기·끄기 공용).
+class _ActionPill extends StatelessWidget {
+  final String label;
+  final bool isPending;
+  final Color color;
+  final Color textColor;
+  final VoidCallback onTap;
+
+  const _ActionPill({
+    required this.label,
+    required this.isPending,
+    required this.color,
+    required this.textColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isPending ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        decoration: BoxDecoration(
+          color: isPending ? kGround : color,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: kBorderMid),
+        ),
+        child: isPending
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child:
+                    CircularProgressIndicator(strokeWidth: 1.5, color: kGreen),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                ),
+              ),
       ),
     );
   }

@@ -11,6 +11,9 @@ abstract class MoamalRepository {
   Future<void> submitIdea(String sessionCode, Idea idea);
   Future<void> setVoteOpen(String sessionCode, bool voteOpen);
   Future<void> castVote(String sessionCode, String participantId, String groupId);
+  /// 학생 자신의 투표만 실시간 구독 — voteOpen 재개방 시 로컬 상태가
+  /// 서버와 어긋나지 않도록 한다(Gemini-4-Vote-01).
+  Stream<String?> listenToMyVote(String sessionCode, String participantId);
   Future<void> clearVotes(String sessionCode);
   Future<void> approveGroups(String sessionCode, List<ApprovedGroup> groups);
   Future<void> deleteApprovedGroup(String sessionCode, String groupId);
@@ -39,14 +42,25 @@ abstract class MoamalRepository {
   Future<void> addTeacherNote({required String sessionCode, required String text, required String uid});
   Future<List<String>> getAllTeacherNotes(String sessionCode);
 
+  /// 가장 최근 교사 발문 1건을 실시간 구독 — 학생 화면 질문 카드용
+  /// (Gemini-7-TeacherNote-01: 기존엔 `ideas`에서 `speaker=='교사'`를
+  /// 찾는 죽은 코드였다. 교사 발문은 `teacher_notes`에만 저장된다).
+  Stream<String?> listenToLatestTeacherNote(String sessionCode);
+
   // ── Merge log ──────────────────────────────────────────────────────────
   Future<void> saveMergeLog(String sessionCode, MergeLog log);
   Future<void> undoMergeLog(String sessionCode, MergeLog log);
 
   // ── Teacher mic control ────────────────────────────────────────────────
+  // forceStart: 잠금 해제만(학생이 직접 눌러야 녹음 시작).
+  // forceSpeak: 잠금 해제 + 즉시 녹음 시작(교사가 "지금 말하세요" 지목할 때).
   Future<void> forceStartMic(String sessionCode, String uid);
   Future<void> clearForceStart(String sessionCode, String uid);
   Stream<bool> listenToForceStart(String sessionCode, String uid);
+
+  Future<void> forceSpeakMic(String sessionCode, String uid);
+  Future<void> clearForceSpeak(String sessionCode, String uid);
+  Stream<bool> listenToForceSpeak(String sessionCode, String uid);
 
   Future<void> forceStopMic(String sessionCode, String uid);
   Future<void> clearForceStop(String sessionCode, String uid);

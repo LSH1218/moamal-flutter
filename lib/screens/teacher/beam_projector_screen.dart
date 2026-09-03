@@ -13,6 +13,11 @@ enum _BeamStage { joining, collecting, voting, results }
 
 _BeamStage _stageOf(SessionState s) {
   if (s.ideas.isEmpty) return _BeamStage.joining;
+  // 승인된 그룹이 없으면 voteOpen·votes 값과 무관하게 의견 수집 단계로
+  // 되돌린다. 투표 종료 후 교사가 승인을 전부 취소하면 voteOpen=false에
+  // votes만 남아 results로 판정되는데, 후보 목록이 비어 화면이 텅 비었다
+  // (Common-Beam-01).
+  if (s.approvedGroups.isEmpty) return _BeamStage.collecting;
   if (s.voteOpen) return _BeamStage.voting;
   if (s.votes.isNotEmpty) return _BeamStage.results;
   return _BeamStage.collecting;
