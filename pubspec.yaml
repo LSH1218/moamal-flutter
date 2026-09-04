@@ -66,6 +66,9 @@ dependencies:
 
   # 딥링크
   app_links: ^6.4.0
+  pdf: ^3.13.0
+  printing: ^5.15.0
+  csv: ^8.0.0
 
 dev_dependencies:
   flutter_test:

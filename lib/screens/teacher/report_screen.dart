@@ -1,9 +1,18 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart' as share_plus;
 import '../../models/group.dart';
+import '../../models/idea.dart';
 import '../../models/meeting_report.dart';
+import '../../models/participant.dart';
 import '../../models/session_state.dart';
 import '../../services/gemini_grouping_engine.dart';
+import '../../services/report_csv_exporter.dart';
+import '../../services/report_pdf_exporter.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
 
@@ -47,6 +56,8 @@ class _ReportScreenState extends State<ReportScreen> {
   MeetingReport? _report;
   late bool _isGenerating;
   bool _isEnding = false;
+  bool _isExportingPdf = false;
+  bool _isExportingCsv = false;
 
   @override
   void initState() {
@@ -95,11 +106,106 @@ class _ReportScreenState extends State<ReportScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  void _share() {
-    final text =
-        _report?.toPlainText(widget.session.title) ?? '아직 리포트가 없습니다.';
-    share_plus.Share.share(text,
-        subject: '모아말 수업기록 ${widget.session.sessionCode}');
+  /// "저장/공유" → "내보내기" (§8 리포트 기능, 2026-09-04). PDF 파일을 만들어
+  /// 표준 OS 공유 시트로 넘긴다 — 교사가 시트에서 파일로 저장(학교 인트라넷·
+  /// 나이스 업로드용)하거나 카톡/문자 등으로 그대로 공유할 수 있다. 텍스트만
+  /// 던지던 이전 `_share()`를 대체한다.
+  Future<void> _exportPdf() async {
+    if (_isExportingPdf) return;
+    setState(() => _isExportingPdf = true);
+    try {
+      final bytes = await buildReportPdf(
+        session: widget.session,
+        report: _report,
+        groups: widget.groups,
+      );
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: '모아말_수업기록_${widget.session.sessionCode}.pdf',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PDF를 만드는 데 실패했어요. 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingPdf = false);
+    }
+  }
+
+  /// CSV 내보내기 — PDF가 사람이 읽는 회의록이라면 이쪽은 학교 인트라넷·나이스처럼
+  /// 표 데이터를 기대하는 곳에 붙여넣기 위한 것(§8, 2026-09-04). `Printing`은
+  /// PDF 전용이라 파일을 임시 디렉터리에 직접 써서 `Share.shareXFiles`로 공유
+  /// 시트를 띄운다 — PDF와 마찬가지로 저장(인트라넷용)·카톡 등 공유 겸용.
+  Future<void> _exportCsv() async {
+    if (_isExportingCsv) return;
+    setState(() => _isExportingCsv = true);
+    try {
+      final csv = buildReportCsv(session: widget.session, groups: widget.groups);
+      final dir = await getTemporaryDirectory();
+      final file = File(
+          '${dir.path}/모아말_학생기록_${widget.session.sessionCode}.csv');
+      await file.writeAsString(csv, encoding: const Utf8Codec());
+      if (!mounted) return;
+      await share_plus.Share.shareXFiles([share_plus.XFile(file.path)]);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('CSV를 만드는 데 실패했어요. 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingCsv = false);
+    }
+  }
+
+  bool get _isExporting => _isExportingPdf || _isExportingCsv;
+
+  /// 내보내기 형식 선택 시트 — PDF(회의록 문서)와 CSV(학생별 표 데이터) 중
+  /// 고른다. appbar 퀵액션과 본문 CTA가 공유한다.
+  void _showExportSheet() {
+    if (_isExporting) return;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: kCardBg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('내보내기 형식',
+                    style:
+                        TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined, color: kGreen),
+              title: const Text('PDF — 읽는 회의록'),
+              subtitle: const Text('학교 인트라넷 업로드·카톡 등 공유용 문서'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _exportPdf();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined, color: kGreen),
+              title: const Text('CSV — 학생별 표 데이터'),
+              subtitle: const Text('나이스 등 표 형식 시스템에 붙여넣기용'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _exportCsv();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -132,7 +238,9 @@ class _ReportScreenState extends State<ReportScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: meetingReport != null ? _share : null,
+              onTap: meetingReport != null && !_isExporting
+                  ? _showExportSheet
+                  : null,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 8),
@@ -142,16 +250,23 @@ class _ReportScreenState extends State<ReportScreen> {
                       : kInk.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  '저장 / 공유',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: meetingReport != null
-                        ? kInk
-                        : kInk.withValues(alpha: 0.4),
-                  ),
-                ),
+                child: _isExporting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: kInk),
+                      )
+                    : Text(
+                        '내보내기',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: meetingReport != null
+                              ? kInk
+                              : kInk.withValues(alpha: 0.4),
+                        ),
+                      ),
               ),
             ),
           ),
@@ -166,7 +281,10 @@ class _ReportScreenState extends State<ReportScreen> {
               meetingReport: meetingReport,
               isGenerating: _isGenerating,
               onGenerate: _generate,
-              onShare: meetingReport != null ? _share : null,
+              onShare: meetingReport != null && !_isExporting
+                  ? _showExportSheet
+                  : null,
+              isExporting: _isExporting,
               onEndSession: _confirmEndSession,
               isEndingSession: _isEnding,
             )
@@ -178,7 +296,10 @@ class _ReportScreenState extends State<ReportScreen> {
               meetingReport: meetingReport,
               isGenerating: _isGenerating,
               onGenerate: _generate,
-              onShare: meetingReport != null ? _share : null,
+              onShare: meetingReport != null && !_isExporting
+                  ? _showExportSheet
+                  : null,
+              isExporting: _isExporting,
               onEndSession: _confirmEndSession,
               isEndingSession: _isEnding,
             ),
@@ -196,6 +317,7 @@ class _CompactBody extends StatelessWidget {
   final bool isGenerating;
   final VoidCallback onGenerate;
   final VoidCallback? onShare;
+  final bool isExporting;
   final VoidCallback onEndSession;
   final bool isEndingSession;
 
@@ -208,6 +330,7 @@ class _CompactBody extends StatelessWidget {
     required this.isGenerating,
     required this.onGenerate,
     required this.onShare,
+    required this.isExporting,
     required this.onEndSession,
     required this.isEndingSession,
   });
@@ -230,6 +353,22 @@ class _CompactBody extends StatelessWidget {
                 isGenerating: isGenerating,
                 onGenerate: onGenerate,
               ),
+              const SizedBox(height: 20),
+              const Text(
+                '참석자 · 학생별 발언 기록',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black38,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _StudentRecordsPanel(
+                participants: session.participants,
+                ideas: session.ideas,
+                votes: session.votes,
+                groups: groups,
+              ),
             ],
           ),
         ),
@@ -238,8 +377,9 @@ class _CompactBody extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: _YellowCta(
-            label: '리포트 저장 / 공유 ↗',
+            label: isExporting ? '내보내는 중...' : '내보내기 / 공유 ↗',
             onTap: onShare,
+            isLoading: isExporting,
           ),
         ),
         Padding(
@@ -264,6 +404,7 @@ class _MediumBody extends StatelessWidget {
   final bool isGenerating;
   final VoidCallback onGenerate;
   final VoidCallback? onShare;
+  final bool isExporting;
   final VoidCallback onEndSession;
   final bool isEndingSession;
 
@@ -276,6 +417,7 @@ class _MediumBody extends StatelessWidget {
     required this.isGenerating,
     required this.onGenerate,
     required this.onShare,
+    required this.isExporting,
     required this.onEndSession,
     required this.isEndingSession,
   });
@@ -334,6 +476,22 @@ class _MediumBody extends StatelessWidget {
                       isGenerating: isGenerating,
                       onGenerate: onGenerate,
                     ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      '참석자 · 학생별 발언 기록',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black38,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _StudentRecordsPanel(
+                      participants: session.participants,
+                      ideas: session.ideas,
+                      votes: session.votes,
+                      groups: groups,
+                    ),
                   ],
                 ),
               ),
@@ -341,8 +499,11 @@ class _MediumBody extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 child: _YellowCta(
-                  label: 'PDF 내보내기 / 학교 시스템 연동',
+                  label: isExporting
+                      ? '내보내는 중...'
+                      : '내보내기 / 학교 시스템 연동',
                   onTap: onShare,
+                  isLoading: isExporting,
                 ),
               ),
               Padding(
@@ -372,7 +533,12 @@ class _StatRow extends StatelessWidget {
     return Row(
       children: [
         _StatChip(
-            value: '${session.votes.isNotEmpty ? session.votes.length : session.ideas.length}명',
+            // participants(누적 입장자)가 정확한 출석 인원이다. 구 세션 등
+            // participants가 비어 있으면(기록 자체가 없던 시절) 기존 근사치로
+            // 폴백한다 — 발언·투표 어느 쪽도 안 한 학생이 있으면 실제보다
+            // 적게 셀 수 있는 값이라 참석 기록이 있을 땐 쓰지 않는다.
+            value:
+                '${session.participants.isNotEmpty ? session.participants.length : (session.votes.isNotEmpty ? session.votes.length : session.ideas.length)}명',
             label: '참여'),
         const SizedBox(width: 8),
         _StatChip(value: '${session.ideas.length}개', label: '발언'),
@@ -538,6 +704,196 @@ class _TopicItem extends StatelessWidget {
   }
 }
 
+// ── 학생별 발언 기록 (§8 리포트 기능, 2026-09-04) ───────────────────────────
+// participants·ideas는 이미 SessionState로 로드돼 있어 신규 구독 없이
+// authorUid ↔ participant uid 조인만으로 구성한다.
+class _StudentRecordsPanel extends StatelessWidget {
+  final List<Participant> participants;
+  final List<Idea> ideas;
+
+  /// participantId → groupId (SessionState.votes, 이미 로드돼 있음 — 교사는
+  /// `firestore.rules` `votes/{participantId}`에 `isOwner` 전체 read 권한이
+  /// 있어 학생 비밀투표 원칙과 충돌 없이 개인별 투표를 볼 수 있다).
+  final Map<String, String> votes;
+  final List<Group> groups;
+
+  const _StudentRecordsPanel({
+    required this.participants,
+    required this.ideas,
+    required this.votes,
+    required this.groups,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (participants.isEmpty) {
+      return const Text(
+        '학생이 참여하면 이름별 발언 기록이 여기에 표시됩니다.',
+        style: TextStyle(fontSize: 13, color: Colors.black38),
+      );
+    }
+
+    final byUid = <String, List<Idea>>{};
+    for (final idea in ideas) {
+      final uid = idea.authorUid;
+      if (uid == null) continue;
+      byUid.putIfAbsent(uid, () => []).add(idea);
+    }
+
+    final groupTitleById = {for (final g in groups) g.id: g.displayTitle};
+
+    final sorted = [...participants]
+      ..sort((a, b) => a.number.compareTo(b.number));
+    final activeCount = sorted.where((p) => p.isActive).length;
+
+    // authorUid가 없는(구 버전) 발언은 특정 학생에게 귀속시킬 수 없다.
+    final attributedIds = sorted.map((p) => p.uid).toSet();
+    final unattributedCount = ideas
+        .where((i) => i.authorUid == null || !attributedIds.contains(i.authorUid))
+        .length;
+
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              activeCount == sorted.length
+                  ? '참석 ${sorted.length}명'
+                  : '참석 ${sorted.length}명 · 현재 접속 $activeCount명',
+              style: const TextStyle(fontSize: 12, color: Colors.black38),
+            ),
+          ),
+        ),
+        ...sorted.map(
+          (p) => _StudentRecordCard(
+            participant: p,
+            ideas: byUid[p.uid] ?? const [],
+            hasVoted: votes.containsKey(p.uid),
+            votedGroupTitle: groupTitleById[votes[p.uid]],
+          ),
+        ),
+        if (unattributedCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '작성자 미상 발언 $unattributedCount건 (구버전 기록)',
+              style: const TextStyle(fontSize: 12, color: Colors.black38),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _StudentRecordCard extends StatelessWidget {
+  final Participant participant;
+  final List<Idea> ideas;
+
+  /// votes 맵에 이 학생의 항목이 있는지 — 투표 여부 자체는 그룹 제목을
+  /// 찾을 수 있는지와 무관하게 이걸로 판단한다.
+  final bool hasVoted;
+
+  /// 투표한 그룹의 제목. votes엔 있는데 groups에서 못 찾으면(병합·삭제된
+  /// 그룹) null — 이 경우도 "투표함"은 맞으므로 hasVoted로만 판단한다.
+  final String? votedGroupTitle;
+
+  const _StudentRecordCard({
+    required this.participant,
+    required this.ideas,
+    required this.hasVoted,
+    required this.votedGroupTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        participant.displayName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: kInk,
+                        ),
+                      ),
+                    ),
+                    if (!participant.isActive) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: kInk.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          '이탈함',
+                          style: TextStyle(
+                              fontSize: 10, color: Colors.black45),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Text(
+                '발언 ${ideas.length}건',
+                style: const TextStyle(fontSize: 12, color: Colors.black38),
+              ),
+            ],
+          ),
+          if (ideas.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                '발언 없음',
+                style: TextStyle(fontSize: 13, color: Colors.black26),
+              ),
+            )
+          else
+            ...ideas.map(
+              (idea) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '· ${idea.text}',
+                  style: const TextStyle(fontSize: 13, color: kInk, height: 1.4),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              hasVoted ? '투표: ${votedGroupTitle ?? "(그룹 정보 없음)"}' : '투표 안 함',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: hasVoted ? kGreen : Colors.black26,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── 주목 발언 인용 카드 ───────────────────────────────────────────────────
 class _QuoteCards extends StatelessWidget {
   final MeetingReport? meetingReport;
@@ -648,8 +1004,10 @@ class _QuoteCard extends StatelessWidget {
 class _YellowCta extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
+  final bool isLoading;
 
-  const _YellowCta({required this.label, required this.onTap});
+  const _YellowCta(
+      {required this.label, required this.onTap, this.isLoading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -664,14 +1022,20 @@ class _YellowCta extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: enabled ? kInk : kInk.withValues(alpha: 0.35),
-          ),
-        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: kInk),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: enabled ? kInk : kInk.withValues(alpha: 0.35),
+                ),
+              ),
       ),
     );
   }
