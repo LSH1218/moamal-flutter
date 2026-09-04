@@ -206,6 +206,7 @@
     <div class="flow-row"><span class="flow-stage">STABILITY</span><span class="flow-items"><b>G6</b> · 네트워크 · 생명주기</span></div>
     <div class="flow-row"><span class="flow-stage">EXTENDED</span><span class="flow-items"><b>G5</b> 다중 학생 · <b>G8</b> 화면 폭 — 환경이 되면 수행. 못 해도 Gemini 실패 아님</span></div>
     <div class="flow-row"><span class="flow-stage">REGRESSION</span><span class="flow-items"><b>GR</b> · 마지막에 한 번</span></div>
+    <div class="flow-row"><span class="flow-stage">NEW FEATURE</span><span class="flow-items"><b>G9</b> · 리포트 기능(2026-09-04 신설) — 학생별 기록·PDF/CSV 내보내기</span></div>
     <div class="milestone"><span class="icon">◆</span><span><b>이번 QA의 단일 마일스톤은 G4-3이다.</b> 학생 공기계에서 투표 버튼을 누름 → Firestore <code>vote</code> 생성 → 교사 에뮬 득표 바가 실시간으로 올라감. 여기까지 가면 <b>학생 → Firebase → 교사 → 승인 → Firebase → 학생 → 투표 → Firebase → 교사</b> 왕복이 한 바퀴 닫힌다.</span></div>
   </div>
 
@@ -552,6 +553,35 @@
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>R-7</b> 슈퍼바이저 PIN → 세션 선택 → 기존 세션 재개 <span class="new-badge">진입은 확인됨</span><span class="risk-badge">Gemini-R-Supervisor-01</span><span class="check-note">2026-09-03 확인. PIN(1218) → 세션 선택 → 기존 세션 재개 → 코드(NONCNN) 입력까지 화면 흐름은 전부 정상. 로고 3탭은 adb 합성 터치로는 인식 안 되고 실제 손가락 탭에서만 동작(에뮬레이터/실기기 터치 드라이버 차이로 추정, 앱 버그 아님). <b>단, 진입 후 다른 사람이 만든 세션에 대해 교사 전용 쓰기가 전부 permission-denied로 실패하는 구조적 문제 발견</b>(<code>Gemini-R-Supervisor-01</code>, BUG_LOG 참조) — "진입"은 되지만 "재개"가 실질적으로 안 됨</span></span></label>
         <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>R-8</b> 리포트 생성 → 공유 <span class="new-badge">확인됨</span><span class="check-note">2026-09-03 확인(물리기기, 슈퍼바이저 세션에서 진행). "AI 요약 생성" → "생성 중..." → 항목별 요약 정상 완성 → "리포트 저장/공유" → 안드로이드 네이티브 공유 시트에 "학급회의 요약 리포트" 정상 노출. 리포트 생성·공유는 Firestore 쓰기가 아니라 AI 백엔드 호출 + 로컬 상태(<code>_meetingReport</code>) + 시스템 공유 시트라 <code>Gemini-R-Supervisor-01</code>(소유권 불일치) 영향을 받지 않음 — 정상 동작 확인. Mercury-Report-06(생성 후 화면 미갱신)도 이번엔 재현 안 됨</span></span></label>
       </div>
+    </div>
+  </div>
+
+  <div class="divider-label">신규 기능 — 리포트 기능 대화방(2026-09-04 신설)</div>
+
+  <!-- ───────────── G9 ───────────── -->
+  <div class="section" id="sec-9">
+    <div class="section-header" onclick="toggleSection('sec-9')">
+      <div class="step-num">9</div>
+      <div style="flex:1">
+        <div class="section-title">리포트 기능 — 학생별 기록·PDF/CSV 내보내기 <span class="ext-tag">NEW FEATURE</span></div>
+        <div class="section-sub">그룹 단위 요약뿐이던 리포트에 학생별 발언·투표·출석 기록과 PDF/CSV 내보내기를 신설. 별도 "리포트 기능" 대화방에서 설계·구현·검증까지 완료 — 상세 배경은 <code>report.md</code></div>
+      </div>
+      <span class="section-count" id="cnt-sec-9">0/0</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="info-note"><span class="icon">ℹ</span><span>기존 <b>Mercury-Report-06</b>(생성 버튼 무반응)은 2026-09-03 GR R-8에서 이미 종결. 이번 라운드는 그 위에 <b>학생별 기록 조인 + PDF/CSV 내보내기</b>가 신규로 얹힌 것을 검증한다. 데이터는 전부 기존 Firestore 필드(<code>ideas.authorUid</code>·<code>participants</code>·<code>votes</code>)를 재사용 — 백엔드·보안 규칙 변경 없음.</span></div>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-1</b> 참여만 하고 발언 없는 학생도 참여 통계에 정확히 집계 <span class="new-badge">확인됨</span><span class="check-note">2026-09-04 실기기 확인(세션 <code>7Y01NM</code>) — 기존 근사치 버그(발언·투표 0건 학생을 놓치던 것) 수정분. 학생 참여만으로 "참여 1명" 정확히 표시</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-2</b> 학생 실발화 → "참석자 · 학생별 발언 기록"에 이름·번호·발언 전문이 정확히 귀속 <span class="new-badge">확인됨</span><span class="check-note">사용자가 학생 기기 마이크로 실제 3회 발화("경복궁 말고 롯데월드...", "앞에 산인 남산에...", "이번 소풍은 경복궁으로") → 참여 1·발언 3·AI그룹 1 반영, "1번 김철수 · 발언 3건"과 발언 3건 전부 정상 렌더링(레이아웃 깨짐 없음)</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-3</b> 학생별 투표 여부·투표 대상 그룹명 표시 <span class="new-badge">확인됨</span><span class="check-note">교사는 <code>firestore.rules</code>상 <code>votes</code> 전체 read 권한이 있어 신규 규칙 변경 없이 개인별 투표를 조인해 볼 수 있음(학생 비밀투표 원칙과 충돌 없음). 투표 안 한 학생은 "투표 안 함"으로 구분 표시</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-4</b> AI 요약 생성 → 내보내기 버튼 활성화 <span class="new-badge">확인됨</span><span class="check-note">"AI 요약 생성" 성공 후 "내보내기" 버튼(appbar 퀵액션 + 본문 CTA)이 활성화, 형식 선택 바텀시트(PDF/CSV) 정상 표시</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-5</b> PDF 내보내기 — 표준 공유 시트 + 한글 폰트 정상 임베드 <span class="new-badge">확인됨</span><span class="check-note">탭 → 로딩 스피너 → 표준 OS 공유 시트에 실제 파일 <code>모아말_수업기록_7Y01NM.pdf</code> 등장(Nearby Share·인쇄·Drive·메시지·블루투스). "인쇄" 옵션으로 PDF 직접 열어 확인 — 노토산스 한글 폰트(구글 폰트 런타임 다운로드) 정상 임베드, 전체 흐름/의견 묶음/투표 결과/결론/미결 쟁점/교사 후속 조치/참석자·학생별 발언 기록 전 섹션 한글 깨짐 없음. <b>주의</b>: 최초 생성 시 기기 인터넷 연결 필요(폰트 런타임 다운로드) — 오프라인 상태에서의 실패 동작은 아직 미검증</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-6</b> CSV 내보내기 — 학생별 표 데이터 정확성(한글 인코딩 포함) <span class="new-badge">확인됨</span><span class="check-note">바텀시트에서 CSV 선택 → 공유 시트에 실제 파일 <code>모아말_학생기록_7Y01NM.csv</code> 등장(Nearby Share·Drive·Gmail). <code>adb shell run-as</code>로 파일을 직접 당겨 내용 확인 — 헤더·학생 행(번호·이름·참석 상태·발언 건수·발언 내용·투표 여부·투표 대상) 전부 정확, UTF-8 BOM으로 엑셀 한글 깨짐 없음</span></span></label>
+        <label class="check-item"><input type="checkbox" class="chk"><span class="check-label"><b>9-7</b> 화면 · PDF · CSV 간 문구·데이터 일치 여부 <span class="risk-badge">불일치 발견</span><span class="check-note">2026-09-04 코드 리뷰로 확인(실기기 재현 아님, 코드상 명백): ① "참석 N명 · <b>현재 접속</b> M명"(화면, <code>report_screen.dart:764</code>) vs "참석 N명 · <b>종료 시점 접속</b> M명"(PDF·공유 텍스트, <code>meeting_report.dart:98</code>·<code>report_pdf_exporter.dart:63</code>) — 같은 값을 다른 문구로 표기 ② 화면엔 있는 "작성자 미상 발언 N건(구버전 기록)" 안내가 <code>toPlainText()</code>·PDF·CSV 세 곳 모두에서 조용히 누락됨 — report.md에 적힌 "화면·공유 텍스트 일치" 원칙과 어긋남. 기능 자체는 정상, 표기 통일만 필요(P3)</span></span></label>
+      </div>
+      <div class="warn-note"><span class="icon">⚠</span><span><b>구조적 관찰(P3, 코드 리뷰)</b>: 학생별 발언·투표 조인 로직이 <code>_StudentRecordsPanel</code>(화면)·<code>MeetingReport.toPlainText()</code>·<code>report_pdf_exporter.dart</code>·<code>report_csv_exporter.dart</code> 네 곳에 독립적으로 중복 구현되어 있다. 9-7의 불일치가 정확히 이 중복에서 비롯됨 — 급하진 않지만 공통 헬퍼로 뽑아두면 향후 드리프트를 막을 수 있다.</span></div>
+      <div class="info-note"><span class="icon">ℹ</span><span><code>flutter analyze</code> 신규 이슈 0건(기존 경고 10건 그대로) · <code>flutter test</code> 39/39 통과 — 2026-09-04 재실행으로 재확인(신규 테스트 19건: <code>report_student_records_test.dart</code>·<code>report_pdf_exporter_test.dart</code>·<code>report_csv_exporter_test.dart</code>). 백엔드·보안 규칙 변경 없음(기존 <code>authorUid</code>·<code>votes</code> 필드 재사용).</span></div>
     </div>
   </div>
 
