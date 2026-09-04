@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -24,7 +25,18 @@ import '../../utils/responsive.dart';
 /// 버튼이 고장난 것으로 보였다. 이제 생성 결과를 `onGenerateReport()`의
 /// **반환값**으로 직접 받아 자기 상태를 갱신한다.
 class ReportScreen extends StatefulWidget {
+  /// 화면 진입 시점의 초기값. 이후 값은 [sessionStream]이 갱신한다 —
+  /// 리포트를 생성한 뒤에 학생이 투표하면 이 값만으로는 반영되지 않는다
+  /// (교사 홈의 `_goToReport()`가 push 시점의 스냅샷을 캐릭터로 넘길 뿐이라
+  /// 화면이 살아있는 동안 새로 일어난 투표를 볼 방법이 없었다. 2026-09-04
+  /// 대표 발견).
   final SessionState session;
+
+  /// 교사 홈이 만든 broadcast 스트림을 그대로 받는다. **필수** —
+  /// `OrganizeScreen`과 같은 이유로 화면이 직접 `listenToSession()`을
+  /// 부르면 안 된다(Mercury-3-Student-01, 재구독 발생).
+  final Stream<SessionState> sessionStream;
+
   final List<Group> groups;
   final GeminiGroupingEngine groupingEngine;
   final String elapsedText;
@@ -39,6 +51,7 @@ class ReportScreen extends StatefulWidget {
   const ReportScreen({
     super.key,
     required this.session,
+    required this.sessionStream,
     required this.groups,
     required this.groupingEngine,
     required this.elapsedText,
@@ -59,11 +72,27 @@ class _ReportScreenState extends State<ReportScreen> {
   bool _isExportingPdf = false;
   bool _isExportingCsv = false;
 
+  /// [widget.session]은 push 시점의 스냅샷일 뿐이라, 화면이 열려 있는 동안
+  /// 새로 들어오는 투표·발언을 보려면 이 필드를 스트림으로 계속 갱신해야
+  /// 한다(위 [ReportScreen.session] 문서 참조).
+  late SessionState _session;
+  StreamSubscription<SessionState>? _sessionSub;
+
   @override
   void initState() {
     super.initState();
     _report = widget.meetingReport;
     _isGenerating = widget.isGeneratingReport;
+    _session = widget.session;
+    _sessionSub = widget.sessionStream.listen((state) {
+      if (mounted) setState(() => _session = state);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    super.dispose();
   }
 
   String get _dateLabel {
@@ -115,14 +144,14 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => _isExportingPdf = true);
     try {
       final bytes = await buildReportPdf(
-        session: widget.session,
+        session: _session,
         report: _report,
         groups: widget.groups,
       );
       if (!mounted) return;
       await Printing.sharePdf(
         bytes: bytes,
-        filename: '모아말_수업기록_${widget.session.sessionCode}.pdf',
+        filename: '모아말_수업기록_${_session.sessionCode}.pdf',
       );
     } catch (_) {
       if (!mounted) return;
@@ -142,10 +171,10 @@ class _ReportScreenState extends State<ReportScreen> {
     if (_isExportingCsv) return;
     setState(() => _isExportingCsv = true);
     try {
-      final csv = buildReportCsv(session: widget.session, groups: widget.groups);
+      final csv = buildReportCsv(session: _session, groups: widget.groups);
       final dir = await getTemporaryDirectory();
       final file = File(
-          '${dir.path}/모아말_학생기록_${widget.session.sessionCode}.csv');
+          '${dir.path}/모아말_학생기록_${_session.sessionCode}.csv');
       await file.writeAsString(csv, encoding: const Utf8Codec());
       if (!mounted) return;
       await share_plus.Share.shareXFiles([share_plus.XFile(file.path)]);
@@ -211,7 +240,7 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final isCompact = context.isCompact;
-    final session = widget.session;
+    final session = _session;
     final meetingReport = _report;
 
     return Scaffold(

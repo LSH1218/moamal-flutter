@@ -460,11 +460,15 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   void _goToReport() {
+    // 세션 스트림이 준비되기 전에는 진입하지 않는다 — ReportScreen은
+    // 스트림을 직접 만들지 않고 여기서 받은 것만 쓴다 (Mercury-3-Student-01).
+    if (_sessionStream == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ReportScreen(
           session: _session,
+          sessionStream: _sessionStream!,
           groups: _groups,
           groupingEngine: _groupingEngine,
           elapsedText: _elapsedText,

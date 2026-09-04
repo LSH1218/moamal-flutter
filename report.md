@@ -163,3 +163,36 @@ value: '${session.votes.isNotEmpty ? session.votes.length : session.ideas.length
 ## 8. 남은 것
 
 §8에 정리된 대로, 오늘 논의에서 나온 1~5번 항목은 전부 구현·검증이 끝났다. 남은 건 대표가 실제 파일럿에서 리포트 기능을 써보며 나오는 피드백을 반영하는 것, 그리고 토론·심포지엄 기능이 실제로 풀릴 때 §3-3의 원칙(학생 uid 기준 로그에 진영/역할 필드를 얹는 확장)에 따라 별도로 설계하는 것이다.
+
+## 9. 사후 발견 버그: 리포트 화면 세션 스냅샷 고정 (`Gemini-9-Report-02`)
+
+1~5번 구현이 끝난 뒤, 대표가 실사용 중 발견했다: **리포트를 생성한 뒤 학생이 투표해도, 리포트 화면을 나가지 않고 그대로 보고 있으면 투표 결과가 반영되지 않는다.**
+
+### 9-1. 원인
+
+`TeacherHomeScreen._goToReport()`가 `Navigator.push()`할 때 `ReportScreen`에 그 순간의 `SessionState`를 **값으로 한 번만** 넘기고 있었다:
+
+```dart
+builder: (_) => ReportScreen(session: _session, ...)
+```
+
+`MaterialPageRoute`의 `builder`는 push 시점에 한 번 호출될 뿐, 부모(`TeacherHomeScreen`)가 이후 `setState`로 아무리 갱신돼도 이미 만들어진 `ReportScreen` 인스턴스를 다시 빌드하지 않는다. 즉 `session` 필드는 그 순간의 **고정 스냅샷**이었다.
+
+같은 코드베이스의 `OrganizeScreen`·`BeamProjectorScreen`·`ClusterVoteScreen`은 이미 이 문제를 알고 있었다 — `organize_screen.dart`의 문서 주석에 "화면이 직접 `listenToSession()`을 부르면 리포지터리가 기존 구독을 끊고 새로 만들기 때문에 build마다 재구독이 발생한다(`Mercury-3-Student-01`)"고 적혀 있고, 대신 교사 홈이 만든 broadcast 스트림(`_sessionStream`)을 그대로 받아 `StreamBuilder`로 실시간 갱신하는 패턴을 쓰고 있었다. 리포트 화면만 이 패턴이 빠져 있었던 이유는, 애초에 리포트 화면엔 "실시간으로 바뀌는 걸 보여줘야 할 것"이 거의 없었기 때문이다(그룹 요약은 한 번 생성하면 끝, 통계는 참고용). 오늘 학생별 투표 표시를 추가하면서 처음으로 "화면이 열려 있는 동안 계속 바뀌는 데이터"가 리포트에 생겼고, 그래서 이 공백이 드러났다.
+
+### 9-2. 수정
+
+- `report_screen.dart`: `ReportScreen`에 `required this.sessionStream`(`Stream<SessionState>`) 파라미터 추가. `_ReportScreenState`에 `_session` 필드와 `StreamSubscription<SessionState>? _sessionSub`를 두고, `initState()`에서 `widget.sessionStream.listen()`으로 구독해 `_session`을 계속 갱신(`dispose()`에서 해제). `_exportPdf()`·`_exportCsv()`·`build()`가 전부 `widget.session`(고정값) 대신 `_session`(최신값)을 참조하도록 교체
+- `teacher_home_screen.dart`: `_goToReport()`가 기존 `_sessionStream`(이미 있던 broadcast 스트림 — `_goToSummary()`·`_goToProjector()`와 동일하게 재사용, 새로 구독하지 않음)을 전달하도록 수정. 스트림이 준비되기 전엔 진입하지 않는 가드도 다른 `_goTo*` 메서드와 동일하게 추가
+
+### 9-3. 검증
+
+`flutter analyze` 신규 이슈 0(기존 10건 그대로), `flutter test` 39/39 통과. 실기기로 정확히 문제가 됐던 시나리오를 재현해 확인했다:
+
+1. 에뮬레이터(교사)에서 리포트 화면을 열고 "AI 요약 생성" — 이 시점엔 참여 학생이 발언만 했고 투표는 안 한 상태
+2. 화면을 전혀 벗어나지 않은 채로, 실기기(학생, SM A305N)에서 새 참가자로 참여 코드 입력 → 투표 화면에서 "어린이대공원 소풍" 선택 → 투표 확정
+3. 교사 쪽 화면을 다시 스크린샷 — **"9번 이상호 · 투표: 어린이대공원 소풍"이 초록색으로 실시간 반영됨**(수정 전이었다면 "투표 안 함"으로 고정돼 있었을 상황)
+
+검증 과정에서 세션 코드에 대문자 O(letter)와 숫자 0(zero)이 섞여 있어 실기기 코드 입력 키패드에서 헷갈렸다 — `MOAMAL_SHARED_CONTEXT.md` §8 UI/UX 항목에 이미 적혀 있던 "세션 코드 생성 시 혼동 문자(O, 0, I, 1, l) 제외" 미해결 항목과 정확히 같은 문제를 실제로 겪은 사례.
+
+상세 기록은 `BUG_LOG_v2.md`의 `[Gemini-9-Report-02]` 항목 참조.

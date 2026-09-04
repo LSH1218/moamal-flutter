@@ -811,6 +811,16 @@
 - **파일**: `lib/screens/teacher/report_screen.dart`, `lib/models/meeting_report.dart`, `lib/services/report_pdf_exporter.dart`, `lib/services/report_csv_exporter.dart`
 - **상태**: 🟡 확인됨 · 우선순위 낮음, 리팩터링 시점은 보류
 
+### [Gemini-9-Report-02] ← 대표가 실사용 중 발견 (2026-09-04)
+- **현상**: 리포트 화면에서 "AI 요약 생성"으로 리포트를 만든 뒤 학생이 투표해도, **리포트 화면을 나가지 않고 그대로 보고 있으면 투표 결과가 반영되지 않는다.** "참여" 인원수도 마찬가지로 갱신되지 않는다
+- **원인**: `TeacherHomeScreen._goToReport()`가 `Navigator.push()`할 때 `ReportScreen`에 그 순간의 `SessionState` **스냅샷**을 값으로 한 번만 넘겼다. `OrganizeScreen`·`BeamProjectorScreen`·`ClusterVoteScreen`은 이미 교사 홈의 `_sessionStream`(broadcast)을 받아 `StreamBuilder`/구독으로 실시간 갱신하는데, 리포트 화면만 이 패턴이 빠져 있었다. 리포트 화면이 애초에 "실시간으로 바뀌는 걸 보여줘야 할 것"이 거의 없었던 기존 설계라 안 드러나다가, 오늘 학생별 투표 표시(§8 리포트 기능)를 추가하면서 처음 노출됨
+- **등급**: P2 — 리포트 화면을 나갔다 다시 들어가면(`_goToReport()` 재호출) 최신 값을 받아오므로 완전히 막히지는 않으나, 교사가 리포트를 띄운 채로 투표 진행 상황을 지켜보는 것이 이 기능의 실사용 시나리오라 체감 임팩트가 크다
+- **수정 (2026-09-04)**:
+  - `report_screen.dart`: `ReportScreen`에 `sessionStream`(`Stream<SessionState>`) 파라미터 추가, `_ReportScreenState`가 `initState()`에서 구독해 `_session` 필드를 계속 갱신(`dispose()`에서 해제). `_exportPdf()`·`_exportCsv()`·`build()` 전부 `widget.session`(고정값) 대신 `_session`(최신값) 참조로 교체
+  - `teacher_home_screen.dart`: `_goToReport()`가 기존 `_sessionStream`(재구독 없이 재사용 — `Mercury-3-Student-01` 교훈 그대로 적용)을 전달하도록 수정, 스트림 준비 전 진입 방지 가드 추가(다른 `_goTo*`와 동일 패턴)
+  - `flutter analyze` 신규 이슈 0(기존 10건 그대로) · `flutter test` 39/39 통과
+- **상태**: ✅ **해결됨** — 실기기 검증 완료(2026-09-04). 에뮬레이터(교사)에서 리포트 화면을 띄운 채로 실기기(학생, SM A305N)가 투표 → **화면을 한 번도 벗어나지 않고** "9번 이상호 · 투표: 어린이대공원 소풍"이 실시간으로 반영되는 것을 직접 확인
+
 ---
 
 ## Apollo
