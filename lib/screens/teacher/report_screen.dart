@@ -13,6 +13,7 @@ import '../../models/participant.dart';
 import '../../models/session_state.dart';
 import '../../services/gemini_grouping_engine.dart';
 import '../../services/report_csv_exporter.dart';
+import '../../services/report_export_naming.dart';
 import '../../services/report_pdf_exporter.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
@@ -78,12 +79,23 @@ class _ReportScreenState extends State<ReportScreen> {
   late SessionState _session;
   StreamSubscription<SessionState>? _sessionSub;
 
+  /// [_report]를 생성했을 때의 발언·투표 건수. 이후 [_session]의 건수가
+  /// 달라지면 요약이 최신 상태가 아니라는 뜻이다(§8, 2026-09-06 — AI 요약을
+  /// 실시간으로 다시 만들면 Gemini 호출이 학생 수만큼 폭증하므로, 대신
+  /// "내보내기" 시점에만 오래됐으면 자동으로 다시 만든다).
+  int? _reportSnapshotIdeaCount;
+  int? _reportSnapshotVoteCount;
+
   @override
   void initState() {
     super.initState();
     _report = widget.meetingReport;
     _isGenerating = widget.isGeneratingReport;
     _session = widget.session;
+    if (_report != null) {
+      _reportSnapshotIdeaCount = _session.ideas.length;
+      _reportSnapshotVoteCount = _session.votes.length;
+    }
     _sessionSub = widget.sessionStream.listen((state) {
       if (mounted) setState(() => _session = state);
     });
@@ -107,10 +119,30 @@ class _ReportScreenState extends State<ReportScreen> {
     if (!mounted) return;
     setState(() {
       // 실패 시 null이 오므로 기존 리포트를 지우지 않는다.
-      if (report != null) _report = report;
+      if (report != null) {
+        _report = report;
+        _reportSnapshotIdeaCount = _session.ideas.length;
+        _reportSnapshotVoteCount = _session.votes.length;
+      }
       _isGenerating = false;
     });
   }
+
+  /// [_report]가 생성된 뒤 발언·투표가 더 들어왔는지 — 서술형 요약(전체 흐름·
+  /// 결론·투표 결과)이 실제 데이터보다 오래됐다는 뜻이다. 학생별 표는 항상
+  /// `_session`에서 바로 읽으므로 이 값과 무관하게 이미 최신이다.
+  bool get _isReportStale =>
+      _report != null &&
+      (_session.ideas.length != _reportSnapshotIdeaCount ||
+          _session.votes.length != _reportSnapshotVoteCount);
+
+  /// 내보내기 직전에만 오래된 요약을 다시 만든다 — 화면을 보는 동안 계속
+  /// 자동 재생성하면 학생 수만큼 Gemini 호출이 늘어나 비용·호출 한도를
+  /// 금방 소진한다. "실제로 파일을 남기는 순간"만 정확하면 된다는 판단.
+  Future<void> _regenerateIfStale() async {
+    if (_isReportStale) await _generate();
+  }
+
 
   /// [수업 끝내기] — 확인 다이얼로그 → endSession() → 랜딩까지 스택 정리.
   /// 리포트 화면(route 3: 랜딩→교사홈→리포트)에서 곧바로 랜딩으로 빠지므로
@@ -143,6 +175,8 @@ class _ReportScreenState extends State<ReportScreen> {
     if (_isExportingPdf) return;
     setState(() => _isExportingPdf = true);
     try {
+      await _regenerateIfStale();
+      if (!mounted) return;
       final bytes = await buildReportPdf(
         session: _session,
         report: _report,
@@ -151,7 +185,7 @@ class _ReportScreenState extends State<ReportScreen> {
       if (!mounted) return;
       await Printing.sharePdf(
         bytes: bytes,
-        filename: '모아말_수업기록_${_session.sessionCode}.pdf',
+        filename: '${reportExportFileBaseName(_session)}.pdf',
       );
     } catch (_) {
       if (!mounted) return;
@@ -171,10 +205,11 @@ class _ReportScreenState extends State<ReportScreen> {
     if (_isExportingCsv) return;
     setState(() => _isExportingCsv = true);
     try {
+      // CSV는 _report(AI 서술 요약)를 전혀 참조하지 않고 _session·groups만
+      // 쓴다 — 둘 다 이미 실시간이라 PDF와 달리 재생성이 필요 없다.
       final csv = buildReportCsv(session: _session, groups: widget.groups);
       final dir = await getTemporaryDirectory();
-      final file = File(
-          '${dir.path}/모아말_학생기록_${_session.sessionCode}.csv');
+      final file = File('${dir.path}/${reportExportFileBaseName(_session)}.csv');
       await file.writeAsString(csv, encoding: const Utf8Codec());
       if (!mounted) return;
       await share_plus.Share.shareXFiles([share_plus.XFile(file.path)]);
