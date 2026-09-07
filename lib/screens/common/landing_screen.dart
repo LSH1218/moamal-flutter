@@ -1,12 +1,30 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
+import '../../models/idea.dart';
+import '../../models/session_state.dart';
+import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
 import '../teacher/sign_in_screen.dart';
 import '../teacher/teacher_home_screen.dart';
 import '../student/join_screen.dart';
+
+/// 해커톤 심사용 데모 시드 의견 — "우리 반에서 바꾸고 싶은 것은?" 학급회의 시나리오.
+const _demoTitle = '우리 반에서 바꾸고 싶은 것은 무엇인가요?';
+const _demoIdeas = [
+  '쉬는 시간을 늘렸으면 좋겠어요.',
+  '쉬는 시간이 너무 짧아요.',
+  '급식 메뉴가 다양했으면 좋겠어요.',
+  '교실에 책을 더 많이 놔주세요.',
+  '체육시간을 늘려주세요.',
+  '쉬는 시간을 5분 더 주세요.',
+  '급식에 디저트가 있었으면 해요.',
+  '독서 시간을 따로 만들어주세요.',
+];
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -165,6 +183,51 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
+  bool _isStartingDemo = false;
+
+  /// 심사위원용 데모 진입 — PIN·Google 로그인 없이 익명 로그인 + 새 세션 +
+  /// 시드 의견으로 즉시 시작한다. 웹 전용(kIsWeb)이며 모바일 앱 흐름은
+  /// 그대로 둔다.
+  Future<void> _startJudgeDemo(BuildContext context) async {
+    if (_isStartingDemo) return;
+    setState(() => _isStartingDemo = true);
+    try {
+      final auth = context.read<AuthService>();
+      final repo = context.read<FirebaseMoamalRepository>();
+      await auth.signInAnonymously();
+      if (!context.mounted) return;
+
+      final session = SessionState.initial().copyWith(
+        title: _demoTitle,
+        ownerUid: auth.currentUid,
+      );
+      await repo.publishSession(session);
+
+      for (final text in _demoIdeas) {
+        await repo.submitIdea(
+          session.sessionCode,
+          Idea(id: const Uuid().v4(), speaker: '학생', text: text, source: 'text'),
+        );
+      }
+
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TeacherHomeScreen(existingCode: session.sessionCode),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('데모 시작 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingDemo = false);
+    }
+  }
+
   void _signInAsTeacher(BuildContext context) {
     Navigator.push(
       context,
@@ -192,6 +255,8 @@ class _LandingScreenState extends State<LandingScreen> {
     final teacherPanel = _TeacherPanel(
       onLogoTap: _onLogoTap,
       onStart: () => _signInAsTeacher(context),
+      onJudgeDemo: kIsWeb ? () => _startJudgeDemo(context) : null,
+      isDemoStarting: _isStartingDemo,
       isTablet: isTablet,
     );
     final studentPanel = _StudentPanel(
@@ -218,11 +283,15 @@ class _LandingScreenState extends State<LandingScreen> {
 class _TeacherPanel extends StatelessWidget {
   final VoidCallback onLogoTap;
   final VoidCallback onStart;
+  final VoidCallback? onJudgeDemo;
+  final bool isDemoStarting;
   final bool isTablet;
 
   const _TeacherPanel({
     required this.onLogoTap,
     required this.onStart,
+    required this.onJudgeDemo,
+    required this.isDemoStarting,
     required this.isTablet,
   });
 
@@ -339,6 +408,44 @@ class _TeacherPanel extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (onJudgeDemo != null) ...[
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: isDemoStarting ? null : onJudgeDemo,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isDemoStarting)
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: kYellow,
+                                    ),
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.play_circle_outline,
+                                    color: kYellow,
+                                    size: 16,
+                                  ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  isDemoStarting ? '데모 준비 중…' : '심사위원이신가요? 데모 바로 시작',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: kYellow.withValues(alpha: 0.9),
+                                    decoration: TextDecoration.underline,
+                                    decorationColor:
+                                        kYellow.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
