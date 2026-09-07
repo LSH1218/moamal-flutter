@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -55,6 +56,11 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
   // Mic state
   _MicStatus _micStatus = _MicStatus.idle;
   bool _forceStopped = false;
+
+  // 웹 데모용 텍스트 입력 — 브라우저 마이크 권한이 없어도 핵심 흐름(의견 제출)이
+  // 막히지 않도록 병행 제공한다. 모바일 앱 UX는 건드리지 않고 kIsWeb에서만 노출.
+  bool _isTextMode = false;
+  final _textController = TextEditingController();
 
   // 교사가 수업을 종료하면(sessions/{code}.endedAt) 마이크와 제출을 잠근다
   // (Gemini-1-Exit-03). _endedHandled는 안내 다이얼로그 1회 표시용.
@@ -289,6 +295,7 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     _teacherNoteSub?.cancel();
     _repo.stopListening();
     _sttClient.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
@@ -460,15 +467,28 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
     }
   }
 
-  Future<void> _submitIdea(String text) async {
+  Future<void> _submitIdea(String text, {String source = 'stt'}) async {
     if (_sessionEnded) return;
     final idea = Idea(
       id: const Uuid().v4(),
       speaker: '학생',
       text: text,
-      source: 'stt',
+      source: source,
     );
     await _repo.submitIdea(widget.sessionCode, idea);
+  }
+
+  /// 텍스트 입력 모드 제출. 음성 흐름과 동일하게 done 상태로 전환해
+  /// "선생님에게 보냈어요" 카드를 재사용한다.
+  Future<void> _submitText() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty || _sessionEnded) return;
+    _textController.clear();
+    setState(() {
+      _micStatus = _MicStatus.done;
+      _lastTranscript = text;
+    });
+    await _submitIdea(text, source: 'text');
   }
 
   Future<void> _castVote() async {
@@ -1058,27 +1078,142 @@ class _StudentSessionScreenState extends State<StudentSessionScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!tight)
-            Text(
-              statusTitle,
-              style: const TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                color: kInk,
+          if (kIsWeb) _inputModeToggle(),
+          if (kIsWeb && _isTextMode)
+            _textInputArea()
+          else ...[
+            if (!tight)
+              Text(
+                statusTitle,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: kInk,
+                ),
               ),
+            if (!tight) const SizedBox(height: 12),
+            _micButton(isBlocked, tight: tight),
+            const SizedBox(height: 8),
+            Text(
+              tight ? statusTitle : hintText,
+              style: TextStyle(
+                fontSize: 12,
+                color: kInk.withValues(alpha: 0.5),
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          if (!tight) const SizedBox(height: 12),
-          _micButton(isBlocked, tight: tight),
-          const SizedBox(height: 8),
-          Text(
-            tight ? statusTitle : hintText,
-            style: TextStyle(fontSize: 12, color: kInk.withValues(alpha: 0.5)),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── 웹 전용: 입력 모드 토글 + 텍스트 입력 ────────────────────────────────────
+
+  Widget _inputModeToggle() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: kGround,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: kBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _modeTab(
+              '🎤 말하기',
+              !_isTextMode,
+              () => setState(() => _isTextMode = false),
+            ),
+          ),
+          Expanded(
+            child: _modeTab(
+              '⌨️ 직접 입력',
+              _isTextMode,
+              () => setState(() => _isTextMode = true),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _modeTab(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? kGreen : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : kInk.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _textInputArea() {
+    final enabled = !_sessionEnded;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _textController,
+            maxLines: 3,
+            minLines: 1,
+            enabled: enabled,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => _submitText(),
+            decoration: InputDecoration(
+              hintText: '의견을 입력하세요',
+              filled: true,
+              fillColor: kCardBg,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: kBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: kBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: kGreen, width: 2),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: enabled ? _submitText : null,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: enabled ? kYellow : kDisabled,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.send, color: kInk, size: 20),
+          ),
+        ),
+      ],
     );
   }
 
