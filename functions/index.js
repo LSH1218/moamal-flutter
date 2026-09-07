@@ -38,6 +38,7 @@ exports.transcribeAudio = onRequest(
       timeoutSeconds: 60,
       memory: "256MiB",
       maxInstances: 10,
+      cors: true,
     },
     async (request, response) => {
       if (request.method !== "POST") {
@@ -114,6 +115,7 @@ exports.geminiProxy = onRequest(
       timeoutSeconds: 60,
       memory: "256MiB",
       maxInstances: 10,
+      cors: true,
     },
     async (request, response) => {
       if (request.method !== "POST") {
@@ -247,6 +249,7 @@ exports.openaiProxy = onRequest(
       timeoutSeconds: 60,
       memory: "256MiB",
       maxInstances: 10,
+      cors: true,
     },
     async (request, response) => {
       if (request.method !== "POST") {
