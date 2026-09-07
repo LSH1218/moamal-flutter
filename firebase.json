@@ -5,5 +5,17 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs22"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "moamal-1e601",
+          "configurations": {
+            "web": "1:58714583922:web:550f045d9fc8027149e3eb"
+          }
+        }
+      }
+    }
   }
 }

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_options.dart';
 import 'models/session_meta.dart';
 import 'repositories/firebase_moamal_repository.dart';
 import 'services/auth_service.dart';
@@ -26,9 +28,13 @@ void main() async {
     DeviceOrientation.landscapeRight,
   ]);
 
-  KakaoSdk.init(nativeAppKey: '287dec7ec232fe4d45c04f8b06a14bdb');
+  if (!kIsWeb) {
+    KakaoSdk.init(nativeAppKey: '287dec7ec232fe4d45c04f8b06a14bdb');
+  }
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: kIsWeb ? DefaultFirebaseOptions.web : null,
+  );
   await PromptConfig.init();
   runApp(const MoamalApp());
 }
