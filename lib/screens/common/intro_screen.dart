@@ -352,12 +352,14 @@ class _AiSection extends StatelessWidget {
             ),
           const SizedBox(height: 8),
           Text(
+            '잘못 묶인 의견은 교사가 다시 옮길 수 있고, 원문은 항상 확인할 수 있습니다.\n'
             '그룹 확정은 교사 검토와 승인을 거쳐야 합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
               color: kInk.withValues(alpha: 0.5),
               fontStyle: FontStyle.italic,
+              height: 1.6,
             ),
           ),
         ],
@@ -449,7 +451,7 @@ class _ValidationSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  '핵심 E2E 흐름은 실제로 구현·검증했습니다.',
+                  '내부 QA와 실기기 테스트로 핵심 흐름을 확인했습니다.',
                   style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
                 ),
               ],
@@ -466,6 +468,18 @@ class _ValidationSection extends StatelessWidget {
               '· 다시 사용할 만큼 유용한지\n'
               '를 확인할 예정입니다.',
               style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            '문제 정의는 TALIS 2024, 교육부 자료, 교사 인터뷰를 참고했습니다.\n'
+            '통계는 참여형 수업의 배경 맥락이며, 의견 정리 부담을 직접\n'
+            '측정한 수치는 아닙니다.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: kInk.withValues(alpha: 0.4),
+              height: 1.6,
             ),
           ),
         ],
