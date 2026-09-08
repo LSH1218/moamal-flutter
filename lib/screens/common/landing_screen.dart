@@ -312,7 +312,10 @@ class _TeacherPanel extends StatelessWidget {
         right: isTablet ? false : true,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final showRecent = constraints.maxHeight >= 360;
+            // 데모 버튼(웹 전용)이 있으면 중앙 콘텐츠가 더 길어지므로
+            // "최근 수업"과 겹치지 않도록 기준선을 더 높게 잡는다.
+            final showRecent =
+                constraints.maxHeight >= (onJudgeDemo != null ? 400 : 360);
             return Padding(
               padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
               child: Column(
@@ -409,7 +412,7 @@ class _TeacherPanel extends StatelessWidget {
                           ),
                         ),
                         if (onJudgeDemo != null) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 6),
                           GestureDetector(
                             onTap: isDemoStarting ? null : onJudgeDemo,
                             child: Row(
@@ -587,11 +590,13 @@ class _StudentPanel extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               // 코드 6칸 미리보기
+              // 간격은 Expanded 안쪽 Padding이 아니라 형제 SizedBox로 줘야 한다 —
+              // 안쪽 Padding 방식은 패딩이 없는 첫 칸만 더 넓게 그려진다.
               Row(
-                children: List.generate(6, (i) {
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(left: i > 0 ? 6 : 0),
+                children: [
+                  for (int i = 0; i < 6; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    Expanded(
                       child: AspectRatio(
                         aspectRatio: 1 / 1.15,
                         child: Container(
@@ -606,8 +611,8 @@ class _StudentPanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                  );
-                }),
+                  ],
+                ],
               ),
               const SizedBox(height: 14),
               // 액션 버튼 행
