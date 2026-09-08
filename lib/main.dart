@@ -12,6 +12,7 @@ import 'repositories/firebase_moamal_repository.dart';
 import 'services/auth_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/prompt_config.dart';
+import 'screens/common/intro_screen.dart';
 import 'screens/common/landing_screen.dart';
 import 'screens/teacher/teacher_home_screen.dart';
 import 'screens/student/join_screen.dart';
@@ -183,6 +184,9 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     super.dispose();
   }
 
+  // 웹 방문자는 소개 화면(IntroScreen)을 먼저 본다 — 해커톤 심사용.
+  // 모바일 앱은 그대로 교사/학생 선택 화면(LandingScreen)이 첫 화면이다.
   @override
-  Widget build(BuildContext context) => const LandingScreen();
+  Widget build(BuildContext context) =>
+      kIsWeb ? const IntroScreen() : const LandingScreen();
 }
