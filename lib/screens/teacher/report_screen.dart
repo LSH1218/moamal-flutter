@@ -797,24 +797,31 @@ class _StudentRecordsPanel extends StatelessWidget {
       );
     }
 
-    final byUid = <String, List<Idea>>{};
-    for (final idea in ideas) {
-      final uid = idea.authorUid;
-      if (uid == null) continue;
-      byUid.putIfAbsent(uid, () => []).add(idea);
-    }
-
     final groupTitleById = {for (final g in groups) g.id: g.displayTitle};
 
     final sorted = [...participants]
       ..sort((a, b) => a.number.compareTo(b.number));
     final activeCount = sorted.where((p) => p.isActive).length;
 
-    // authorUid가 없는(구 버전) 발언은 특정 학생에게 귀속시킬 수 없다.
     final attributedIds = sorted.map((p) => p.uid).toSet();
-    final unattributedCount = ideas
-        .where((i) => i.authorUid == null || !attributedIds.contains(i.authorUid))
-        .length;
+    // 표시명("번호번 이름") → uid. authorUid가 참가자와 안 맞을 때만 쓰는 보조
+    // 매칭이다 — 실제 학생 제출은 speaker가 항상 '학생' 고정값이라 이 경로를
+    // 타지 않고, 데모 시드처럼 speaker에 표시명을 직접 넣은 경우에만 해당된다.
+    final uidByDisplayName = {for (final p in sorted) p.displayName: p.uid};
+
+    final byUid = <String, List<Idea>>{};
+    var unattributedCount = 0;
+    for (final idea in ideas) {
+      final uid = idea.authorUid;
+      final resolvedUid = (uid != null && attributedIds.contains(uid))
+          ? uid
+          : uidByDisplayName[idea.speaker];
+      if (resolvedUid == null) {
+        unattributedCount++;
+        continue;
+      }
+      byUid.putIfAbsent(resolvedUid, () => []).add(idea);
+    }
 
     return Column(
       children: [

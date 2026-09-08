@@ -31,14 +31,24 @@ Future<Uint8List> buildReportPdf({
   final theme = pw.ThemeData.withFont(base: regular, bold: bold);
 
   final groupTitleById = {for (final g in groups) g.id: g.displayTitle};
+  final sortedParticipants = [...session.participants]
+    ..sort((a, b) => a.number.compareTo(b.number));
+
+  final attributedIds = sortedParticipants.map((p) => p.uid).toSet();
+  // authorUid가 참가자와 안 맞을 때만 쓰는 보조 매칭(표시명 "번호번 이름"
+  // 기준) — report_screen.dart의 _StudentRecordsPanel과 동일 규칙.
+  final uidByDisplayName = {
+    for (final p in sortedParticipants) p.displayName: p.uid,
+  };
   final byUid = <String, List<Idea>>{};
   for (final idea in session.ideas) {
     final uid = idea.authorUid;
-    if (uid == null) continue;
-    byUid.putIfAbsent(uid, () => []).add(idea);
+    final resolvedUid = (uid != null && attributedIds.contains(uid))
+        ? uid
+        : uidByDisplayName[idea.speaker];
+    if (resolvedUid == null) continue;
+    byUid.putIfAbsent(resolvedUid, () => []).add(idea);
   }
-  final sortedParticipants = [...session.participants]
-    ..sort((a, b) => a.number.compareTo(b.number));
   final activeCount = sortedParticipants.where((p) => p.isActive).length;
 
   doc.addPage(

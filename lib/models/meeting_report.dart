@@ -82,14 +82,22 @@ class MeetingReport {
     sb.writeln('[ 교사 후속 조치 ]\n$nextAction');
 
     if (participants.isNotEmpty) {
+      final sorted = [...participants]
+        ..sort((a, b) => a.number.compareTo(b.number));
+
+      final attributedIds = sorted.map((p) => p.uid).toSet();
+      // authorUid가 참가자와 안 맞을 때만 쓰는 보조 매칭(표시명 "번호번 이름"
+      // 기준) — report_screen.dart의 _StudentRecordsPanel과 동일 규칙.
+      final uidByDisplayName = {for (final p in sorted) p.displayName: p.uid};
       final byUid = <String, List<Idea>>{};
       for (final idea in ideas) {
         final uid = idea.authorUid;
-        if (uid == null) continue;
-        byUid.putIfAbsent(uid, () => []).add(idea);
+        final resolvedUid = (uid != null && attributedIds.contains(uid))
+            ? uid
+            : uidByDisplayName[idea.speaker];
+        if (resolvedUid == null) continue;
+        byUid.putIfAbsent(resolvedUid, () => []).add(idea);
       }
-      final sorted = [...participants]
-        ..sort((a, b) => a.number.compareTo(b.number));
       final activeCount = sorted.where((p) => p.isActive).length;
 
       sb.writeln('\n[ 참석자 · 학생별 발언 기록 ]');

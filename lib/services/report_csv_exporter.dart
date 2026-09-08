@@ -14,14 +14,22 @@ String buildReportCsv({
   required List<Group> groups,
 }) {
   final groupTitleById = {for (final g in groups) g.id: g.displayTitle};
+  final sorted = [...session.participants]
+    ..sort((a, b) => a.number.compareTo(b.number));
+
+  final attributedIds = sorted.map((p) => p.uid).toSet();
+  // authorUid가 참가자와 안 맞을 때만 쓰는 보조 매칭(표시명 "번호번 이름"
+  // 기준) — report_screen.dart의 _StudentRecordsPanel과 동일 규칙.
+  final uidByDisplayName = {for (final p in sorted) p.displayName: p.uid};
   final byUid = <String, List<Idea>>{};
   for (final idea in session.ideas) {
     final uid = idea.authorUid;
-    if (uid == null) continue;
-    byUid.putIfAbsent(uid, () => []).add(idea);
+    final resolvedUid = (uid != null && attributedIds.contains(uid))
+        ? uid
+        : uidByDisplayName[idea.speaker];
+    if (resolvedUid == null) continue;
+    byUid.putIfAbsent(resolvedUid, () => []).add(idea);
   }
-  final sorted = [...session.participants]
-    ..sort((a, b) => a.number.compareTo(b.number));
 
   final rows = <List<dynamic>>[
     ['번호', '이름', '참석 상태', '발언 건수', '발언 내용', '투표 여부', '투표 대상'],
