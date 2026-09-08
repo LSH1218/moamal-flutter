@@ -145,8 +145,8 @@ class _HeroSection extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             '학급회의에서 학생 의견은 나옵니다.\n'
-            '하지만 그 의견을 정리하고, 결정으로 만들고,\n'
-            '기록으로 남기는 일은 여전히 교사의 몫입니다.',
+            '하지만 여러 의견을 정리하고, 결정으로 연결하고,\n'
+            '기록으로 남기는 과정은 여전히 교사가 직접 처리해야 합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
@@ -158,7 +158,7 @@ class _HeroSection extends StatelessWidget {
           _CtaButton(isStarting: isStarting, onTap: onStart, big: true),
           const SizedBox(height: 22),
           Text(
-            '학생 발화 → AI 구조화 → 교사 승인 → 투표 → 기록',
+            '학생 발화 → AI 구조화 → 교사 검토 → 투표 → 기록',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -235,8 +235,10 @@ class _FlowSection extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           const Text(
-            '학생의 발화를 실시간 텍스트로 바꾸고, 비슷한 의견을 구조화합니다.\n'
-            '교사가 직접 검토·수정·승인한 뒤 투표와 기록까지 이어집니다.',
+            '학생의 발화를 실시간 텍스트로 바꾸고,\n'
+            '비슷한 의견을 하나의 구조로 정리합니다.\n'
+            '교사가 직접 검토·수정·승인한 뒤\n'
+            '투표와 기록까지 하나의 흐름으로 이어집니다.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14.5, color: kInk, height: 1.7),
           ),
@@ -350,7 +352,7 @@ class _AiSection extends StatelessWidget {
             ),
           const SizedBox(height: 8),
           Text(
-            '그룹 확정은 교사 승인을 거쳐야 합니다.',
+            '그룹 확정은 교사 검토와 승인을 거쳐야 합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -393,8 +395,8 @@ class _DifferentiationSection extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '기존 참여·투표 도구와 기능적으로 겹치는 부분은 있지만,\n'
-            '모아말은 수업 전 과정을 연결하는 흐름에 초점을 둡니다.',
+            '모아말은 개별 기능의 추가보다\n'
+            '학생의 의견이 수업의 결정과 기록으로 이어지는 과정에 초점을 둡니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -428,21 +430,43 @@ class _ValidationSection extends StatelessWidget {
               color: kInk,
             ),
           ),
-          const SizedBox(height: 18),
-          _ValidationRow(
+          const SizedBox(height: 22),
+          _ValidationBlock(
             icon: Icons.check_circle,
             iconColor: kGreen,
-            text:
-                '학생 의견 제출부터 AI 구조화, 교사 승인, 투표, 결과 기록까지의\n'
-                '핵심 E2E 흐름은 구현·검증했습니다.',
+            label: '구현·검증 완료',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '학생 의견 제출 → AI 구조화 → 교사 승인 → 투표 → 결과 기록',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: kInk.withValues(alpha: 0.7),
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '핵심 E2E 흐름은 실제로 구현·검증했습니다.',
+                  style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          _ValidationRow(
+          const SizedBox(height: 18),
+          _ValidationBlock(
             icon: Icons.hourglass_bottom,
             iconColor: kInk.withValues(alpha: 0.4),
-            text:
-                '다음 단계에서는 실제 교실 파일럿을 통해\n'
-                '업무시간 감소와 반복 사용 여부를 검증할 예정입니다.',
+            label: '다음 검증',
+            child: const Text(
+              '실제 교실 파일럿을 통해\n'
+              '· 교사의 업무시간이 실제로 감소하는지\n'
+              '· 다시 사용할 만큼 유용한지\n'
+              '를 확인할 예정입니다.',
+              style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
+            ),
           ),
         ],
       ),
@@ -450,29 +474,42 @@ class _ValidationSection extends StatelessWidget {
   }
 }
 
-class _ValidationRow extends StatelessWidget {
+class _ValidationBlock extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
-  final String text;
+  final String label;
+  final Widget child;
 
-  const _ValidationRow({
+  const _ValidationBlock({
     required this.icon,
     required this.iconColor,
-    required this.text,
+    required this.label,
+    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: iconColor, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
-          ),
+        Row(
+          children: [
+            Icon(icon, color: iconColor, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: kInk,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 26),
+          child: child,
         ),
       ],
     );
@@ -505,7 +542,7 @@ class _FinalCtaSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '2~3분이면 전체 흐름을 볼 수 있습니다',
+            '2~3분이면 모아말의 전체 흐름을 직접 볼 수 있습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
