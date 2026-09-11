@@ -59,6 +59,10 @@ class _IntroScreenState extends State<IntroScreen> {
       backgroundColor: kGround,
       body: SingleChildScrollView(
         child: Column(
+          // Column 기본값(center)은 자식에게 느슨한 폭 제약을 준다.
+          // stretch로 각 섹션(Container(width: double.infinity))이 항상
+          // 뷰포트 전체 폭을 확실히 받도록 고정한다.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _HeroSection(isStarting: _isStarting, onStart: _startDemo),
             _FlowSection(),
