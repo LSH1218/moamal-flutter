@@ -58,6 +58,9 @@ functions/.secret.local
 # Claude Code
 .claude/
 
+# Firebase CLI local cache
+.firebase/
+
 # Crash dumps
 android/hs_err_pid*.log
 android/java_pid*.hprof
