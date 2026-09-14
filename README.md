@@ -1,6 +1,17 @@
 # Moamal — 교사 중심 실시간 의견 구조화 서비스
 
-Flutter 기반 앱. 학생이 제출한 의견을 AI가 실시간으로 클러스터링하고, 교사가 투표·승인·리포트 생성까지 진행한다.
+Flutter 기반 참여형 수업 도구. 학생 의견을 AI가 정리하고, 교사가 검토·승인한 뒤 학생 투표와 수업 기록으로 연결한다. 토론·심포지엄 지원을 목표로 하며, 현재 학급회의 MVP로 기반 흐름을 검증한다.
+
+## 현재 공개 데모와 문서
+
+- 공개 주소: https://moamal-1e601.web.app/ (2026-09-14 웹 소개 및 학생 투표 체험 배포)
+- 진행 현황·일정: [HACKATHON_PREP.md](HACKATHON_PREP.md)
+- 데모 검증 결과·한계: [DEMO_VOTE_QA.md](DEMO_VOTE_QA.md)
+- 공통 현황: [MOAMAL_SHARED_CONTEXT.md](MOAMAL_SHARED_CONTEXT.md), UI 이력: [UI_REDESIGN_LOG.md](UI_REDESIGN_LOG.md), 결함: [BUG_LOG_v2.md](BUG_LOG_v2.md)
+- 체험 순서: 학급회의 체험하기 → 정리 → 후보 승인 → 투표 시작 → 학생으로 한 표 넣어보기 → 교사 화면 복귀 → 수업기록.
+- 예시 학생 5명·의견 8개로 시작한다. 별도 익명 계정의 체험 학생 1명이 본인 표를 저장하며, 교사 인증은 유지된다. 수업기록에는 ‘체험 학생’의 선택이 표시된다.
+- 새 데모만 `sessions/{code}.isJudgeDemo: true`를 갖는다. 이전 데모로 자동 복귀하면 수업을 끝내고 새 데모를 시작해야 한다. 이 표시는 UI 구분용이며 서버 권한 판정 수단이 아니다.
+- 최초 학생 연결 실패 1회는 원인 미확정이다. 일반 수업의 마감 후 쓰기 및 교사 권한 관련 규칙 문제도 별도 미해결 상태다.
 
 ---
 
@@ -301,7 +312,7 @@ multiDexEnabled = true
 - **QR 페이로드는 `DeepLinkService.buildJoinUri(code)` = `moamal://join/{code}`** (2026-08-25 변경)
   - 폰 기본 카메라로 찍으면 앱이 열린다 (`AndroidManifest.xml` intent-filter `scheme=moamal, host=join`)
   - QR 생성 지점은 4곳 — `_QrSheet`, `_QrFullScreen`, `beam_projector_screen`(2). (`display_tab`·`facilitator_tab`은 죽은 코드로 확인되어 2026-08-26 삭제됨 — Mercury-Redesign-01)
-  - ⚠ **앱 미설치 기기는 `moamal://`로 열 수 없다.** 웹 럜딩 URL 도입은 미결정
+  - ⚠ **앱 미설치 기기는 `moamal://`로 열 수 없다.** 웹 소개·데모는 별도 URL로 배포됐지만, 기존 QR을 HTTPS 학생 참여 경로로 연결하는 작업이 완료됐다는 뜻은 아니다.
 
 ---
 
@@ -334,7 +345,8 @@ multiDexEnabled = true
 - [x] Gemini QA G6(네트워크·생명주기, STABILITY) 완료 (2026-09-03) — 백그라운드 복귀·비행기모드·오프라인 제출·강제종료 7개 전부 실기기 검증. `Common-Network-01`(P1, Mercury v1부터 미검증) 재현 안 됨으로 종결, `Mercury-Session-02` 스냅샷 복원 실기기 확인(승인 경로). 신규 발견: 학생 세션 강제종료 시 자동 복귀 로직 부재(`Gemini-6-Session-01`). 상세는 `gemini_qa.html`·`BUG_LOG_v2.md`
 - [x] Gemini S 섹션(Firestore 보안 규칙 실검증) 완료 (2026-08-28) — S-1~S-10 전부 Firestore 에뮬레이터로 통과, Apollo 진입 차단 조건(S-7·S-8·S-9) 충족
 - [x] Gemini QA GR(회귀 체크) 완료 (2026-09-03) — R-1~R-8 전부 실기기 통과. `Mercury-Report-06`(P1, 리포트 생성 버튼 무반응) 실기기 검증으로 종결. 신규 발견: 슈퍼바이저 "기존 세션 재개" 시 세션 소유권 불일치로 교사 전용 쓰기 전부 실패(`Gemini-R-Supervisor-01`). **CORE·S·G7·G6·GR 전부 완료 — Apollo 진입 판단만 남음**(G5·G8 확장 항목은 대표 판단으로 스킵). 상세는 `gemini_qa.html`·`BUG_LOG_v2.md`
-- [ ] **웹 랜딩 페이지** — QR 딥링크가 `moamal://`라 앱 미설치 기기 미대응 (`BUG_LOG_v2.md` Mercury-Share-01)
+- [x] **웹 소개·심사용 데모** — 2026-09-14 소개 문구와 독립 학생 투표 체험 Hosting 배포. 상세는 `HACKATHON_PREP.md`.
+- [ ] **QR의 웹 학생 참여 연결** — 기존 `moamal://`의 앱 미설치 기기 대응은 별도 항목 (`BUG_LOG_v2.md` Mercury-Share-01).
 - [ ] **교사·학생 수동 텍스트 입력 복원 여부** — 재설계로 `student_tab`이 끊기면서 현재 `ideas` 생성 경로가 STT 단일 (`BUG_LOG_v2.md` Mercury-Redesign-01)
 - [ ] `Common-Rules-02` — 투표 마감 후에도 학생 `votes` 쓰기 가능. 의도적으로 미적용, Gemini QA 종료 직후 규칙 추가 예정(현황판 §15)
 - [ ] 학생 세션 강제종료 후 자동 복귀 로직 (`Gemini-6-Session-01`, 등급 확정 전략기획 판단 필요)

@@ -9,6 +9,7 @@ import '../../services/gemini_grouping_engine.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/responsive.dart';
 import 'package:provider/provider.dart';
+import 'demo_vote_panel.dart';
 
 class OrganizeScreen extends StatefulWidget {
   final String sessionCode;
@@ -1460,6 +1461,7 @@ class _VoteTabState extends State<_VoteTab> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
             children: [
+              DemoVotePanel(key: ValueKey(session.sessionCode), session: session),
               // Stat row
               _VoteStatRow(
                 totalParticipants: totalParticipants,

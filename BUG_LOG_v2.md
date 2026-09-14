@@ -2,7 +2,7 @@
 
 > UI 전면 재설계(2026-08) 이후 버전 기준.  
 > 형식: `[단계-섹션번호-컴포넌트-순번]`  
-> 단계: Mercury / Gemini / Apollo / Common  
+> 단계: Mercury / Gemini / Apollo / Common / Hackathon
 > v1(`BUG_LOG.md`)에서 해결된 항목은 하단 **v1 해결 이력**에 요약.
 
 ---
@@ -19,6 +19,8 @@
 ---
 
 ## Mercury
+
+> 해커톤 웹 데모 관련 결함은 이 문서의 `Hackathon` 섹션을 참조한다. Apollo 다인 QA와 구분한다.
 
 ### [Mercury-2-STT-02]
 - **현상**: PTT 모드에서 아무 말 없이 손 떼면 Whisper가 무음 오디오를 그럴싸한 한국어 문장으로 환각(hallucination) 생성 → 가짜 teacher_note가 Firestore에 저장됨
@@ -918,6 +920,16 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
   로그아웃 없이 랜딩에서 학생 코드 입장 → `participants` 문서 ID가 새 익명 UID인지 확인
   (교사 UID가 아니어야 정상). **회피책(학생 기기 앱 데이터 삭제)은 검증 전까지 유지**
 
+### [Common-Rules-05] ← 백엔드 방 대화 중 발견 (2026-09-14)
+- **발견 경위**: 대표가 "교사 이메일로 아무렇게나 로그인해도 통과되냐"고 질문 → 로그인 화면(`sign_in_screen.dart`)에는 텍스트 입력창이 없어 그 경로는 성립하지 않음을 확인하는 과정에서, 교사 판별 자체가 **클라이언트에서만** 이뤄지고 있음을 발견
+- **현상**: `AuthService.checkTeacherAccess()`(이메일 도메인·`whitelisted_teachers` 대조)는 Flutter 앱 코드에만 있고, **Firestore 보안 규칙은 이 판정을 전혀 참조하지 않는다.** `sessions` 생성 규칙은 `signedIn() && request.resource.data.ownerUid == request.auth.uid`만 요구 — 로그인만 되어 있으면 익명 계정(=학생용)도 임의 세션 문서를 만들고 그 세션의 `ownerUid`가 되어 교사 권한(승인·투표 개폐·`forceStart`/`forceStop`·`mergeLogs` 기록)을 전부 행사할 수 있다
+- **영향 범위**: 앱 UI로만 쓰면 마주칠 일이 없다(그런 버튼 자체가 없음). Firestore SDK를 직접 호출할 수 있는 사용자(리버스 엔지니어링 또는 웹 클라이언트 직접 조작)에게만 해당
+- **원인**: "교사 승인" 개념이 화이트리스트 대조 → UI 라우팅 분기로만 구현되어 있고, 이 대조 결과를 서버(Firestore 규칙)에 전달하는 경로가 없음. `whitelisted_teachers` 컬렉션은 클라이언트에서 읽기만 가능(`allow write: if false`)하지만, 규칙이 `sessions.create` 시점에 이 컬렉션을 조회하지 않음
+- **등급**: P1 (파일럿 규모에서 실사용 악용 가능성은 낮으나, 여러 학교로 확장 시 필수 수정)
+- **수정 방향(아직 미착수)**: `sessions` 생성 규칙에 `get(/databases/$(database)/documents/whitelisted_teachers/$(request.auth.token.email))` 또는 uid 기반 대조 조건 추가. 이메일 도메인 화이트리스트(`_allowedDomains`/`.es.kr` 등 정규식)는 클라이언트 상수라 규칙에서 재구현하거나 Custom Claims로 옮겨야 함 — 후자가 더 안전하지만 카카오/네이버 커스텀 토큰 발급(`kakaoVerify`/`naverVerify`)에도 claim 부여 로직 추가가 필요해 별도 설계 필요
+- **파일**: `firestore.rules`(`sessions` match 블록), `lib/services/auth_service.dart` `checkTeacherAccess()`, `functions/index.js` `kakaoVerify`/`naverVerify`
+- **상태**: 🔴 미해결 · **기록만, 대표 판단으로 지금은 착수하지 않음** (2026-09-14)
+
 ---
 
 ## v1 해결 이력 (BUG_LOG.md → v2로 이월하지 않은 항목)
@@ -938,3 +950,31 @@ _(실제 수업 흐름 테스트 시작 후 기록)_
 | Mercury-2-EmptyText-01 | 빈 text 필드 의견이 화면에 표시됨 | ✅ `_buildState()`에서 `.where((idea) => idea.text.trim().isNotEmpty)` 필터 추가 |
 | Mercury-2-VAD-Threshold-01 | VAD threshold -40dB — 실 기기 ambient noise(-37~-39dBFS)가 threshold보다 높아 "speech"로 판정, 침묵 타이머 리셋 반복 | ✅ threshold를 `-34dB`로 상향. 창문 열린 실내 환경에서 silence=3037ms 정상 트리거 확인 |
 | Mercury-TeacherDock-FAB-01 | 마이크 버튼이 독 위로 떠오르는 FAB 형태 — 교사가 의도한 플랫 5버튼 레이아웃과 다름 | ✅ Stack/Transform.translate 제거, `Row(mainAxisAlignment: spaceEvenly)` 인라인 배치로 전환 |
+
+
+## Hackathon
+
+### [Hackathon-Demo-Vote-01] 혼자 체험할 때 학생 투표를 진행할 수 없음
+- **발견**: 2026-09-14 공개 데모 검토. 예시 학생 5명은 접속 클라이언트가 아니므로 교사가 투표를 열어도 0표 상태에서 체험 동선이 끊긴다.
+- **등급**: P2 — 심사자 단독 체험의 완주 문제.
+- **수정**: 교사 인증과 분리된 이름 있는 Firebase 앱의 익명 체험 학생을 연결하고, 본인 참가자·투표 문서를 일반 권한으로 기록. 투표 탭에 데모 전용 창 추가. 새 데모에 `isJudgeDemo: true` 표시.
+- **검증**: 로컬 웹 + 실제 Firebase에서 후보 승인 → 투표 열기 → 체험 학생 한 표 → 교사 득표 → 수업기록 확인. 재진입 시 인원 6명·투표 1표 유지, 이후 교사 마감 권한 정상. 기존 테스트 46개 통과.
+- **파일**: `lib/services/judge_demo_seeder.dart`, `lib/services/demo_student_client.dart`, `lib/screens/teacher/demo_vote_panel.dart`, `lib/screens/teacher/organize_screen.dart`.
+- **상태**: 해결·2026-09-14 Hosting 배포. 공개 소개 페이지와 사용자 배포 확인 완료. 에이전트의 공개 URL 전체 투표 재실행은 미실시. 최초 연결 실패는 아래 별도 미해결 항목으로 유지.
+
+### [Hackathon-Demo-Connect-01] 체험 학생 최초 연결 실패 1회
+- **발견**: 2026-09-14 로컬 웹에서 데모 후보 승인·투표 시작 후 ‘학생으로 한 표 넣어보기’를 처음 눌렀을 때 연결 실패 안내.
+- **원인**: 미확정. 당시 구체적인 예외를 확보하지 못했으며 일시적 네트워크 문제로 단정하지 않는다.
+- **영향**: 심사자가 학생 투표 체험에 바로 진입하지 못할 수 있음.
+- **등급**: P2 (잠정) — 재로드 후 성공. 재현 빈도에 따라 재평가.
+- **후속 확인**: 진단 로그 추가 빌드에서 같은 세션 재연결 성공, 투표·기록 반영 정상, 창 재진입 정상. 실패 시 다시 연결 버튼 제공.
+- **상태**: 미해결·추가 재현 필요. 새 브라우저 상태에서 첫 연결 및 느린 네트워크 조건을 확인할 것.
+- **파일**: `lib/screens/teacher/demo_vote_panel.dart`, `lib/services/demo_student_client.dart`.
+
+### [Hackathon-Demo-Result-01] 교사가 투표를 닫으면 득표 수치가 숨겨짐
+- **발견**: 2026-09-14 데모 한 표 전송 후 교사 ‘투표 닫고 결과 확정’ 실행.
+- **현상**: 투표 중 1표·100%였던 후보가 마감 후 ‘—’와 빈 막대로 바뀌고 상태는 투표 대기로 표시된다. 수업기록에는 선택이 정상 보존된다.
+- **원인**: 기존 `_VoteTab`과 `_VoteStatRow`가 `voteOpen`일 때만 수치·막대를 표시한다.
+- **등급**: P2 — 데이터 유실은 아니나 ‘결과 확정’ 직후 결과를 보기 어려움.
+- **상태**: 미해결·UI 개선 검토. 이번 학생 체험 추가에서 일반 교사 투표 동작은 변경하지 않았다.
+- **파일**: `lib/screens/teacher/organize_screen.dart`.

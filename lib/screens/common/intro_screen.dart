@@ -37,9 +37,9 @@ class _IntroScreenState extends State<IntroScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('데모 시작 실패: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('데모 시작 실패: $e')));
       }
     } finally {
       if (mounted) setState(() => _isStarting = false);
@@ -130,14 +130,20 @@ class _HeroSection extends StatelessWidget {
                 letterSpacing: -0.02 * 28,
               ),
               children: [
-                TextSpan(text: '모아', style: TextStyle(color: Colors.white)),
-                TextSpan(text: '말', style: TextStyle(color: kYellow)),
+                TextSpan(
+                  text: '모아',
+                  style: TextStyle(color: Colors.white),
+                ),
+                TextSpan(
+                  text: '말',
+                  style: TextStyle(color: kYellow),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 18),
           const Text(
-            '학생의 말을, 수업의 결정으로.',
+            '학생의 생각을, 수업의 흐름으로',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 26,
@@ -148,9 +154,10 @@ class _HeroSection extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            '학급회의에서 학생 의견은 나옵니다.\n'
-            '하지만 여러 의견을 정리하고, 결정으로 연결하고,\n'
-            '기록으로 남기는 과정은 여전히 교사가 직접 처리해야 합니다.',
+            '학생의 이야기를 듣는 동안에도\n'
+            '교사는 의견을 정리하고, 논의를 이끌고,\n'
+            '수업 내용을 기록해야 합니다.\n'
+            '모아말은 이 일을 함께 돕는 수업 도구입니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
@@ -162,7 +169,8 @@ class _HeroSection extends StatelessWidget {
           _CtaButton(isStarting: isStarting, onTap: onStart, big: true),
           const SizedBox(height: 22),
           Text(
-            '학생 발화 → AI 구조화 → 교사 검토 → 투표 → 기록',
+            '지금은 학급회의로 시작합니다.\n'
+            '토론·심포지엄 수업까지 넓혀가려 합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -181,7 +189,7 @@ class _HeroSection extends StatelessWidget {
 class _FlowSection extends StatelessWidget {
   const _FlowSection();
 
-  static const _steps = ['말하기', 'AI 구조화', '교사 검토', '투표', '기록'];
+  static const _steps = ['학생 의견', 'AI 정리', '교사 검토', '투표', '수업 기록'];
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +199,7 @@ class _FlowSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
-            '의견을 받는 것에서 끝나지 않습니다',
+            '의견을 모으고, 함께 살펴보고, 기록합니다',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 21,
@@ -239,10 +247,10 @@ class _FlowSection extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           const Text(
-            '학생의 발화를 실시간 텍스트로 바꾸고,\n'
-            '비슷한 의견을 하나의 구조로 정리합니다.\n'
-            '교사가 직접 검토·수정·승인한 뒤\n'
-            '투표와 기록까지 하나의 흐름으로 이어집니다.',
+            '학생이 말하면 글로 옮기고, 비슷한 의견을 묶습니다.\n'
+            '교사는 묶인 의견을 살펴보고 수정한 뒤\n'
+            '투표에 올릴 후보를 승인합니다.\n'
+            '학생들의 의견과 투표 결과는 수업 기록으로 남깁니다.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14.5, color: kInk, height: 1.7),
           ),
@@ -256,7 +264,8 @@ class _FlowSection extends StatelessWidget {
               border: Border.all(color: kGreen.withValues(alpha: 0.18)),
             ),
             child: const Text(
-              'AI는 결정을 대신하지 않습니다.\nAI는 정리하고, 교사가 판단합니다.',
+              '어떤 의견을 함께 묶을지는 교사가 확인합니다.\n'
+              '학생들이 처음에 한 말도 다시 볼 수 있습니다.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14.5,
@@ -278,21 +287,9 @@ class _AiSection extends StatelessWidget {
   const _AiSection();
 
   static const _items = [
-    (
-      Icons.mic,
-      'STT',
-      '학생 발화를 텍스트로 변환',
-    ),
-    (
-      Icons.hub_outlined,
-      'LLM 구조화',
-      '의미가 비슷한 의견을 그룹화',
-    ),
-    (
-      Icons.summarize_outlined,
-      '리포트 생성',
-      '수업 종료 후 논의 흐름을 정리',
-    ),
+    (Icons.mic, '말을 글로 옮기기', '학생이 말한 내용을 음성인식으로 받아씁니다.'),
+    (Icons.hub_outlined, '비슷한 의견 묶기', '표현이 달라도 뜻이 비슷한 의견을 AI가 찾아 묶습니다.'),
+    (Icons.summarize_outlined, '수업 내용 요약하기', '어떤 의견이 나왔는지 AI가 요약합니다.'),
   ];
 
   @override
@@ -302,7 +299,7 @@ class _AiSection extends StatelessWidget {
       child: Column(
         children: [
           const Text(
-            'AI는 이렇게 사용합니다',
+            'AI가 돕는 세 가지 일',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 21,
@@ -356,8 +353,8 @@ class _AiSection extends StatelessWidget {
             ),
           const SizedBox(height: 8),
           Text(
-            '잘못 묶인 의견은 교사가 다시 옮길 수 있고, 원문은 항상 확인할 수 있습니다.\n'
-            '그룹 확정은 교사 검토와 승인을 거쳐야 합니다.',
+            'AI가 잘못 묶었다면 의견을 다른 묶음으로 옮기거나\n'
+            '묶음의 이름을 바꿀 수 있습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -384,7 +381,7 @@ class _DifferentiationSection extends StatelessWidget {
       child: Column(
         children: [
           const Text(
-            '기능이 아니라, 흐름입니다',
+            '학급회의에서 시작해, 토론과 심포지엄으로',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 21,
@@ -394,15 +391,17 @@ class _DifferentiationSection extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            '의견 수집, AI 구조화, 교사 검토, 투표, 참여 기록을\n'
-            '하나의 학급회의 세션 안에서 이어지게 설계했습니다.',
+            '모아말은 교사와 나눈 수업 이야기에서 출발했습니다.\n'
+            '학생의 의견을 모으는 일부터 수업 기록까지\n'
+            '한곳에서 다룰 수 있으면 좋겠다는 생각이었습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14.5, color: kInk, height: 1.7),
           ),
           const SizedBox(height: 14),
           Text(
-            '모아말은 개별 기능의 추가보다\n'
-            '학생의 의견이 수업의 결정과 기록으로 이어지는 과정에 초점을 둡니다.',
+            '첫 단계로 학급회의에 필요한 기능을 만들었습니다.\n'
+            '앞으로는 서로 다른 입장과 근거를 비교하는 토론,\n'
+            '발표와 질문이 오가는 심포지엄 수업도 돕고자 합니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12.5,
@@ -428,7 +427,7 @@ class _ValidationSection extends StatelessWidget {
       child: Column(
         children: [
           const Text(
-            '현재 검증 상태',
+            '지금까지 확인한 것과 앞으로 확인할 것',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 21,
@@ -440,12 +439,12 @@ class _ValidationSection extends StatelessWidget {
           _ValidationBlock(
             icon: Icons.check_circle,
             iconColor: kGreen,
-            label: '구현·검증 완료',
+            label: '만들고 테스트했습니다',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '학생 의견 제출 → AI 구조화 → 교사 승인 → 투표 → 결과 기록',
+                  '의견 보내기 → AI 정리 → 교사 승인 → 투표 → 수업 기록',
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -455,7 +454,9 @@ class _ValidationSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  '내부 QA와 실기기 테스트로 핵심 흐름을 확인했습니다.',
+                  '안드로이드 휴대폰과 가상 기기를 연결해, 교사 한 명과 학생 한 명이 '
+                  '의견을 주고받고 투표하는 과정을 테스트했습니다. '
+                  '수업 기록을 만들고 내보내는 기능도 확인했습니다.',
                   style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
                 ),
               ],
@@ -465,20 +466,19 @@ class _ValidationSection extends StatelessWidget {
           _ValidationBlock(
             icon: Icons.hourglass_bottom,
             iconColor: kInk.withValues(alpha: 0.4),
-            label: '다음 검증',
+            label: '실제 수업에서 확인하려 합니다',
             child: const Text(
-              '실제 교실 파일럿을 통해\n'
-              '· 교사의 업무시간이 실제로 감소하는지\n'
-              '· 다시 사용할 만큼 유용한지\n'
-              '를 확인할 예정입니다.',
+              '여러 학생이 함께 써도 원활하게 작동하는지, '
+              '교사의 정리 시간이 줄어드는지, '
+              '다음 수업에도 쓰고 싶은 도구인지는 앞으로 확인할 과제입니다.',
               style: TextStyle(fontSize: 13.5, color: kInk, height: 1.6),
             ),
           ),
           const SizedBox(height: 22),
           Text(
-            '문제 정의는 TALIS 2024, 교육부 자료, 교사 인터뷰를 참고했습니다.\n'
-            '통계는 참여형 수업의 배경 맥락이며, 의견 정리 부담을 직접\n'
-            '측정한 수치는 아닙니다.',
+            '교사 인터뷰 1건과 TALIS 2024, 교육부 자료를 참고했습니다.\n'
+            '참고 자료는 수업 환경을 이해하기 위한 것으로,\n'
+            '모아말의 효과를 측정한 결과는 아닙니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11.5,
@@ -525,10 +525,7 @@ class _ValidationBlock extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.only(left: 26),
-          child: child,
-        ),
+        Padding(padding: const EdgeInsets.only(left: 26), child: child),
       ],
     );
   }
@@ -550,7 +547,7 @@ class _FinalCtaSection extends StatelessWidget {
       child: Column(
         children: [
           const Text(
-            '지금 바로 확인해보세요',
+            '예시 의견으로 직접 살펴보세요',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 19,
@@ -560,7 +557,9 @@ class _FinalCtaSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '2~3분이면 모아말의 전체 흐름을 직접 볼 수 있습니다.',
+            '예시 학생 5명과 의견 8개가 준비돼 있습니다.\n'
+            '의견을 살펴보고, 후보를 승인하고, 수업 요약을 만들어보세요.\n'
+            '실제 학생이 접속한 수업은 아닙니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -632,13 +631,10 @@ class _CtaButton extends StatelessWidget {
             ? const SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: kInk,
-                ),
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: kInk),
               )
             : Text(
-                '데모 체험하기',
+                '학급회의 체험하기',
                 style: TextStyle(
                   fontSize: big ? 16.5 : 15,
                   fontWeight: FontWeight.w800,

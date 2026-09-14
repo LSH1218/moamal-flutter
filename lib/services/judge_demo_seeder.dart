@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/idea.dart';
 import '../models/participant.dart';
@@ -47,6 +48,10 @@ Future<String> seedJudgeDemoSession({
     ownerUid: auth.currentUid,
   );
   await repo.publishSession(session);
+  await FirebaseFirestore.instance
+      .collection('sessions')
+      .doc(session.sessionCode)
+      .update({'isJudgeDemo': true});
 
   // 참가자 목록 — 세션 소유자(교사)는 다른 uid로도 participants 문서를
   // 만들 수 있다(firestore.rules: isOwner(sessionCode)). "참여 0명"으로
