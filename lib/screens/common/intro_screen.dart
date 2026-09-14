@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/firebase_moamal_repository.dart';
 import '../../services/auth_service.dart';
@@ -86,16 +87,27 @@ Widget _copy(
   double size = 16,
   bool bold = false,
   Color color = kInk,
-}) => Text(
-  text,
-  style: TextStyle(
-    fontSize: size,
-    fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
-    color: color,
-    height: 1.55,
-  ),
-);
+}) => text.contains('\n\n')
+    ? _stack([
+        for (final paragraph in text.split('\n\n'))
+          _copy(paragraph, size: size, bold: bold, color: color),
+      ], gap: 20)
+    : Text(
+        text,
+        strutStyle: StrutStyle(
+          fontSize: size,
+          height: 1.55,
+          forceStrutHeight: true,
+        ),
+        style: TextStyle(
+          fontSize: size,
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
+          color: color,
+          height: 1.55,
+        ),
+      );
 Widget _stack(List<Widget> children, {double gap = 20}) => Column(
+  mainAxisSize: MainAxisSize.min,
   crossAxisAlignment: CrossAxisAlignment.start,
   children: [
     for (var i = 0; i < children.length; i++) ...[
@@ -110,7 +122,7 @@ Widget _card(
   double padding = 24,
 }) => Container(
   width: double.infinity,
-  padding: EdgeInsets.all(padding),
+  padding: EdgeInsets.fromLTRB(padding, padding, padding, padding + 16),
   decoration: BoxDecoration(
     color: color,
     borderRadius: BorderRadius.circular(18),
@@ -125,7 +137,7 @@ class _SectionShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
-      final mobile = c.maxWidth < 800;
+      final mobile = c.maxWidth < 1000;
       return ColoredBox(
         color: background,
         child: Center(
@@ -136,7 +148,7 @@ class _SectionShell extends StatelessWidget {
                 horizontal: mobile ? 24 : 80,
                 vertical: mobile ? 48 : 64,
               ),
-              child: builder(mobile),
+              child: SizedBox(width: double.infinity, child: builder(mobile)),
             ),
           ),
         ),
@@ -153,17 +165,87 @@ class _Cards extends StatelessWidget {
   @override
   Widget build(BuildContext context) => mobile
       ? _stack(children, gap: gap)
-      : IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) SizedBox(width: gap),
-                Expanded(child: children[i]),
-              ],
-            ],
-          ),
-        );
+      : _EqualHeightRow(gap: gap, children: children);
+}
+
+// Measure real paragraph layout at the final column width. Web fallback fonts
+// can wrap differently from an intrinsic-height estimate, so use laid-out sizes.
+class _EqualHeightRow extends MultiChildRenderObjectWidget {
+  final double gap;
+  const _EqualHeightRow({required this.gap, required super.children});
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _EqualHeightRender(gap);
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _EqualHeightRender renderObject,
+  ) {
+    if (renderObject.gap != gap) {
+      renderObject.gap = gap;
+      renderObject.markNeedsLayout();
+    }
+  }
+}
+
+class _CardParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _EqualHeightRender extends RenderBox
+    with
+        ContainerRenderObjectMixin<
+          RenderBox,
+          ContainerBoxParentData<RenderBox>
+        >,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          ContainerBoxParentData<RenderBox>
+        > {
+  double gap;
+  _EqualHeightRender(this.gap);
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! ContainerBoxParentData<RenderBox>) {
+      child.parentData = _CardParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final width = constraints.maxWidth;
+    final columnWidth = (width - gap * (childCount - 1)) / childCount;
+    var height = 0.0;
+    var child = firstChild;
+    while (child != null) {
+      child.layout(
+        BoxConstraints.tightFor(width: columnWidth),
+        parentUsesSize: true,
+      );
+      if (child.size.height > height) height = child.size.height;
+      child = childAfter(child);
+    }
+    var x = 0.0;
+    child = firstChild;
+    while (child != null) {
+      child.layout(
+        BoxConstraints.tightFor(width: columnWidth, height: height),
+        parentUsesSize: true,
+      );
+      (child.parentData! as ContainerBoxParentData<RenderBox>).offset = Offset(
+        x,
+        0,
+      );
+      x += columnWidth + gap;
+      child = childAfter(child);
+    }
+    size = constraints.constrain(Size(width, height));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
 }
 
 class _HeroSection extends StatelessWidget {
@@ -236,7 +318,11 @@ class _FlowSection extends StatelessWidget {
     background: kGround,
     builder: (mobile) => _stack([
       _copy('수업은 이렇게 이어집니다', size: 12, bold: true, color: kGreen),
-      _copy('의견을 모으고, 함께 살펴보고, 기록합니다', size: mobile ? 28 : 32, bold: true),
+      _copy(
+        mobile ? '의견을 모으고,\n함께 살펴보고,\n기록합니다' : '의견을 모으고, 함께 살펴보고, 기록합니다',
+        size: mobile ? 28 : 32,
+        bold: true,
+      ),
       _Cards(
         mobile: mobile,
         gap: 12,
@@ -258,11 +344,11 @@ class _FlowSection extends StatelessWidget {
                 ),
                 _copy(
                   [
-                    '말이나 글로 생각을 보냅니다.',
-                    '비슷한 뜻의 의견을 묶습니다.',
-                    '묶음을 살펴보고 후보를 승인합니다.',
-                    '승인된 후보에 한 표를 보냅니다.',
-                    '의견과 투표 결과를 함께 남깁니다.',
+                    '말이나 글로\n생각을 보냅니다.',
+                    '비슷한 뜻의\n의견을 묶습니다.',
+                    '묶음을 살펴보고\n후보를 승인합니다.',
+                    '승인된 후보에\n한 표를 보냅니다.',
+                    '의견과 투표 결과를\n함께 남깁니다.',
                   ][i],
                   size: 14,
                   color: i == 2 ? kCardBg : _muted,
